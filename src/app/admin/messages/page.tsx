@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { MessageSquare, Search, Send, Plus, Users, X } from 'lucide-react'
+import { MessageSquare, Search, Send, Plus, Users, X, Paperclip, Image as ImageIcon, Video, Link2, FileText } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import { ROLE_LABELS } from '@/lib/constants'
+import { sendMessageWithMedia, uploadMessageAttachment, extractUrl } from '@/lib/messaging'
 
 export default function AdminMessagesPage() {
   const supabase = createClient()
@@ -23,6 +24,10 @@ export default function AdminMessagesPage() {
   const [showNewConv, setShowNewConv] = useState(false)
   const [allUsers, setAllUsers] = useState<any[]>([])
   const [userSearch, setUserSearch] = useState('')
+  const [attachmentPreview, setAttachmentPreview] = useState<{url:string,type:string}|null>(null)
+  const [uploading, setUploading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadUser()
@@ -77,14 +82,45 @@ export default function AdminMessagesPage() {
     await supabase.from('messages').update({ is_read: true }).eq('conversation_id', convId).neq('sender_id', user.id).eq('is_read', false)
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const result = await uploadMessageAttachment(supabase, file)
+    if (result) {
+      setAttachmentPreview(result)
+      toast.success('File ready to send')
+    } else {
+      toast.error('Upload failed')
+    }
+    setUploading(false)
+  }
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMessage.trim() || !selectedConv) return
+    if ((!newMessage.trim() && !attachmentPreview) || !selectedConv) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { error } = await supabase.from('messages').insert({ conversation_id: selectedConv, sender_id: user.id, content: newMessage.trim() })
+
+    const msgType = attachmentPreview
+      ? attachmentPreview.type === 'image' ? 'image' : attachmentPreview.type === 'video' ? 'video' : 'file'
+      : extractUrl(newMessage) ? 'link' : 'text'
+
+    const { error } = await sendMessageWithMedia(supabase, {
+      conversation_id: selectedConv,
+      sender_id: user.id,
+      content: newMessage.trim() || (attachmentPreview ? `Sent ${attachmentPreview.type}` : ''),
+      message_type: msgType as any,
+      attachment_url: attachmentPreview?.url,
+      attachment_type: attachmentPreview?.type,
+    })
     if (error) toast.error('Failed to send')
-    else { setNewMessage(''); loadMessages(selectedConv); loadConversations() }
+    else {
+      setNewMessage('')
+      setAttachmentPreview(null)
+      loadMessages(selectedConv)
+      loadConversations()
+    }
   }
 
   const loadAllUsers = async () => {
@@ -249,10 +285,40 @@ export default function AdminMessagesPage() {
                     </div>
                   ) : messages.map((msg) => {
                     const isOwn = msg.sender_id === currentUser?.id
+                    const url = extractUrl(msg.content || '')
                     return (
                       <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[75%] rounded-xl px-4 py-2.5 ${isOwn ? 'bg-[#0a1628] text-white' : 'bg-gray-100 text-gray-900'}`}>
-                          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                          {msg.attachment_url && msg.attachment_type === 'image' && (
+                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer">
+                              <img src={msg.attachment_url} alt="Shared image" className="rounded-lg max-h-48 mb-2 cursor-pointer hover:opacity-90" />
+                            </a>
+                          )}
+                          {msg.attachment_url && msg.attachment_type === 'video' && (
+                            <video src={msg.attachment_url} controls className="rounded-lg max-h-48 mb-2 w-full" />
+                          )}
+                          {msg.attachment_url && msg.attachment_type !== 'image' && msg.attachment_type !== 'video' && (
+                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 mb-2 text-xs ${isOwn ? 'text-[#c9a227]' : 'text-blue-600'} hover:underline`}>
+                              <FileText className="w-4 h-4" /> View attachment
+                            </a>
+                          )}
+                          {msg.content && (
+                            <p className="text-sm whitespace-pre-wrap">
+                              {url ? (
+                                <>
+                                  {msg.content.replace(url, '')}
+                                  <a href={url} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 ${isOwn ? 'text-[#c9a227]' : 'text-blue-600'} hover:underline break-all`}>
+                                    <Link2 className="w-3 h-3 shrink-0" />{url}
+                                  </a>
+                                </>
+                              ) : msg.content}
+                            </p>
+                          )}
+                          {msg.message_type === 'help_request' && (
+                            <div className={`flex items-center gap-1 mt-1 text-[10px] ${isOwn ? 'text-[#c9a227]' : 'text-orange-600'}`}>
+                              <MessageSquare className="w-3 h-3" /> Help Request
+                            </div>
+                          )}
                           <p className={`text-[10px] mt-1 ${isOwn ? 'text-gray-400' : 'text-gray-500'}`}>
                             {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
                           </p>
@@ -260,9 +326,28 @@ export default function AdminMessagesPage() {
                       </div>
                     )
                   })}
+                  <div ref={messagesEndRef} />
                 </div>
+                {/* Attachment preview */}
+                {attachmentPreview && (
+                  <div className="px-3 py-2 border-t bg-gray-50 flex items-center gap-3">
+                    {attachmentPreview.type === 'image' ? (
+                      <img src={attachmentPreview.url} alt="Preview" className="h-12 w-12 object-cover rounded" />
+                    ) : attachmentPreview.type === 'video' ? (
+                      <Video className="w-6 h-6 text-red-500" />
+                    ) : (
+                      <FileText className="w-6 h-6 text-gray-500" />
+                    )}
+                    <span className="text-xs text-gray-600 flex-1">Attachment ready</span>
+                    <Button variant="ghost" size="sm" onClick={() => setAttachmentPreview(null)}><X className="w-3 h-3" /></Button>
+                  </div>
+                )}
                 <div className="border-t p-3">
                   <form onSubmit={sendMessage} className="flex gap-2">
+                    <input ref={fileInputRef} type="file" accept="image/*,video/*,.pdf,.doc,.docx" className="hidden" onChange={handleFileUpload} />
+                    <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="shrink-0">
+                      <Paperclip className={`w-4 h-4 ${uploading ? 'animate-spin' : ''}`} />
+                    </Button>
                     <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1" />
                     <Button type="submit" className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628]"><Send className="w-4 h-4" /></Button>
                   </form>

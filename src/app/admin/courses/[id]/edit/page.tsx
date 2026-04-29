@@ -12,6 +12,7 @@ import { COURSE_CATEGORIES, VISIBILITY_OPTIONS, extractYouTubeId, youtubeEmbedUr
 import { ArrowLeft, Save, Eye, Plus, Trash2, GripVertical, Youtube, FileText, Sparkles, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import CoverGenerator from '@/components/cover-generator'
 
 interface Lesson {
   id: string
@@ -359,8 +360,22 @@ export default function EditCoursePage() {
             <textarea value={course?.description || ''} onChange={(e) => setCourse({ ...course, description: e.target.value })} className="w-full min-h-[80px] px-3 py-2 border rounded-md text-sm" />
           </div>
           <div>
-            <Label>Thumbnail URL</Label>
-            <Input value={course?.thumbnail_url || ''} onChange={(e) => setCourse({ ...course, thumbnail_url: e.target.value })} placeholder="Paste image URL or upload" />
+            <Label>Thumbnail</Label>
+            <div className="flex items-start gap-4">
+              {course?.thumbnail_url && (
+                <img src={course.thumbnail_url} alt="Cover" className="w-32 h-20 object-cover rounded border" />
+              )}
+              <div className="flex-1 space-y-2">
+                <Input value={course?.thumbnail_url || ''} onChange={(e) => setCourse({ ...course, thumbnail_url: e.target.value })} placeholder="Paste image URL or upload" />
+                <CoverGenerator
+                  courseTitle={course?.title || ''}
+                  courseCategory={course?.category}
+                  courseDescription={course?.description}
+                  currentThumbnail={course?.thumbnail_url}
+                  onSelectCover={(url) => setCourse({ ...course, thumbnail_url: url })}
+                />
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

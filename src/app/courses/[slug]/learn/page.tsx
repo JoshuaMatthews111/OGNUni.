@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { youtubeEmbedUrl } from '@/lib/constants'
+import { findOrCreateConversation, sendMessageWithMedia } from '@/lib/messaging'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -48,6 +49,9 @@ export default function CoursePlayer() {
   const [quizSubmitting, setQuizSubmitting] = useState(false)
   const [quizResult, setQuizResult] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'notes' | 'discussion' | 'quiz'>('notes')
+  const [helpNote, setHelpNote] = useState('')
+  const [showHelpModal, setShowHelpModal] = useState(false)
+  const [sendingHelp, setSendingHelp] = useState(false)
 
   const supabase = createClient()
 
@@ -377,6 +381,58 @@ export default function CoursePlayer() {
                     </Button>
                   )}
                 </div>
+
+                {/* Message Instructor Button */}
+                {course?.instructor?.id && (
+                  <div className="mt-4 pt-4 border-t border-dashed">
+                    {!showHelpModal ? (
+                      <Button variant="outline" className="w-full border-[#c9a227] text-[#c9a227] hover:bg-[#c9a227]/10" onClick={() => setShowHelpModal(true)}>
+                        <HelpCircle className="w-4 h-4 mr-2" /> Message Instructor for Help
+                      </Button>
+                    ) : (
+                      <div className="bg-[#0a1628]/5 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-[#0a1628]">Ask your instructor for help</p>
+                          <button onClick={() => setShowHelpModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="text-xs text-gray-500 bg-white rounded p-2 border">
+                          <p><strong>Course:</strong> {course.title}</p>
+                          <p><strong>Lesson:</strong> {currentLesson.title}</p>
+                        </div>
+                        <textarea
+                          value={helpNote}
+                          onChange={(e) => setHelpNote(e.target.value)}
+                          className="w-full px-3 py-2 border rounded-md text-sm min-h-[80px]"
+                          placeholder="Describe what you need help with..."
+                        />
+                        <Button
+                          disabled={sendingHelp || !helpNote.trim()}
+                          className="w-full bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold"
+                          onClick={async () => {
+                            if (!user || !course?.instructor?.id) return
+                            setSendingHelp(true)
+                            const convId = await findOrCreateConversation(supabase, user.id, course.instructor.id, `Help: ${course.title}`)
+                            if (convId) {
+                              const content = `📚 **Help Request**\n\n**Course:** ${course.title}\n**Lesson:** ${currentLesson.title}${currentLesson.scripture_references ? `\n**Scripture:** ${currentLesson.scripture_references}` : ''}\n\n${helpNote.trim()}`
+                              await sendMessageWithMedia(supabase, {
+                                conversation_id: convId, sender_id: user.id,
+                                content, message_type: 'help_request',
+                              })
+                              toast.success('Message sent to your instructor!')
+                              setHelpNote('')
+                              setShowHelpModal(false)
+                            } else {
+                              toast.error('Could not reach instructor')
+                            }
+                            setSendingHelp(false)
+                          }}
+                        >
+                          <Send className="w-4 h-4 mr-2" /> {sendingHelp ? 'Sending...' : 'Send to Instructor'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Navigation */}
                 <div className="flex justify-between pt-4 border-t">

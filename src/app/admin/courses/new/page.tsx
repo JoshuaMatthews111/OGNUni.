@@ -12,6 +12,7 @@ import { ArrowLeft, Save, Eye, Upload, ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import Image from 'next/image'
+import CoverGenerator from '@/components/cover-generator'
 
 export default function NewCoursePage() {
   const router = useRouter()
@@ -224,7 +225,7 @@ export default function NewCoursePage() {
           <CardHeader>
             <CardTitle className="text-lg text-[#0a1628]">Featured Graphic</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="flex items-start gap-6">
               <div className="w-48 h-32 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
                 {thumbnailPreview || form.thumbnail_url ? (
@@ -237,20 +238,28 @@ export default function NewCoursePage() {
                   <ImageIcon className="w-8 h-8 text-gray-400" />
                 )}
               </div>
-              <div className="flex-1">
-                <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0a1628] text-white rounded-lg cursor-pointer hover:bg-[#1a3a5c] transition-colors text-sm">
-                  <Upload className="w-4 h-4" />
-                  Upload Image
-                  <input type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" />
-                </label>
-                <p className="text-xs text-gray-500 mt-2">
-                  Recommended: 800x450px. Shows on dashboard, catalog, and course pages.
+              <div className="flex-1 space-y-2">
+                <div className="flex gap-2">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0a1628] text-white rounded-lg cursor-pointer hover:bg-[#1a3a5c] transition-colors text-sm">
+                    <Upload className="w-4 h-4" />
+                    Upload Image
+                    <input type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" />
+                  </label>
+                  <CoverGenerator
+                    courseTitle={form.title}
+                    courseCategory={form.category}
+                    courseDescription={form.description}
+                    currentThumbnail={form.thumbnail_url}
+                    onSelectCover={(url) => { setForm({ ...form, thumbnail_url: url }); setThumbnailPreview(url) }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  Recommended: 1280x720px. Shows on dashboard, catalog, and course pages.
                 </p>
                 {form.thumbnail_url && (
                   <Input
                     value={form.thumbnail_url}
                     onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })}
-                    className="mt-2"
                     placeholder="Or paste image URL..."
                   />
                 )}
