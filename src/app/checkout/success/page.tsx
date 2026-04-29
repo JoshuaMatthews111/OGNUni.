@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,15 @@ import { CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 
-export default function CheckoutSuccess() {
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-16 h-16 border-4 border-[#c9a227] border-t-transparent rounded-full animate-spin" /></div>}>
+      <CheckoutSuccess />
+    </Suspense>
+  )
+}
+
+function CheckoutSuccess() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
