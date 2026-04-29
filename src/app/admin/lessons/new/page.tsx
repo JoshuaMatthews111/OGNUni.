@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { extractYouTubeId, youtubeEmbedUrl } from '@/lib/constants'
-import { ArrowLeft, Save, Youtube, Sparkles, Upload } from 'lucide-react'
+import { ArrowLeft, Save, Youtube, Sparkles, Upload, ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -30,7 +30,9 @@ export default function NewLessonPage() {
     estimated_duration_minutes: 30,
     is_required: true,
     quiz_required: false,
+    thumbnail_url: '',
   })
+  const [fetchingThumb, setFetchingThumb] = useState(false)
 
   useEffect(() => {
     loadCourses()
@@ -106,6 +108,7 @@ export default function NewLessonPage() {
       order_index: lessonCount.count || 0,
       youtube_url: form.youtube_url || null,
       youtube_embed_id: ytId,
+      thumbnail_url: form.thumbnail_url || null,
       lesson_notes: form.lesson_notes || null,
       scripture_references: form.scripture_references || null,
       estimated_duration_minutes: form.estimated_duration_minutes,
@@ -165,11 +168,51 @@ export default function NewLessonPage() {
 
             <div>
               <Label>YouTube Video URL</Label>
-              <Input value={form.youtube_url} onChange={(e) => setForm({ ...form, youtube_url: e.target.value })} placeholder="https://youtube.com/watch?v=..." />
+              <div className="flex gap-2">
+                <Input value={form.youtube_url} onChange={(e) => setForm({ ...form, youtube_url: e.target.value })} placeholder="https://youtube.com/watch?v=..." className="flex-1" />
+                {form.youtube_url && (
+                  <Button type="button" variant="outline" size="sm" disabled={fetchingThumb} onClick={async () => {
+                    setFetchingThumb(true)
+                    try {
+                      const res = await fetch(`/api/youtube-thumbnail?url=${encodeURIComponent(form.youtube_url)}`)
+                      const data = await res.json()
+                      if (data.recommended) { setForm(f => ({ ...f, thumbnail_url: data.recommended })); toast.success('Thumbnail fetched!') }
+                      else toast.error('Could not fetch thumbnail')
+                    } catch { toast.error('Failed to fetch') }
+                    setFetchingThumb(false)
+                  }}>
+                    <ImageIcon className="w-4 h-4 mr-1" />{fetchingThumb ? '...' : 'Get Thumbnail'}
+                  </Button>
+                )}
+              </div>
               {ytPreviewId && (
                 <div className="mt-3 rounded-lg overflow-hidden border">
                   <iframe src={youtubeEmbedUrl(ytPreviewId)} className="w-full aspect-video" allowFullScreen title="Preview" />
                 </div>
+              )}
+            </div>
+
+            {/* Thumbnail */}
+            <div>
+              <Label>Lesson Thumbnail</Label>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0a1628] text-white rounded-lg cursor-pointer hover:bg-[#1a3a5c] text-sm">
+                  <Upload className="w-4 h-4" /> Upload Custom
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const fileName = `lesson-thumb-${Date.now()}.${file.name.split('.').pop()}`
+                    const { error } = await supabase.storage.from('course-thumbnails').upload(fileName, file)
+                    if (error) { toast.error('Upload failed: ' + error.message); return }
+                    const { data } = supabase.storage.from('course-thumbnails').getPublicUrl(fileName)
+                    setForm(f => ({ ...f, thumbnail_url: data.publicUrl }))
+                    toast.success('Thumbnail uploaded!')
+                  }} />
+                </label>
+                <Input value={form.thumbnail_url} onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })} placeholder="Or paste image URL..." className="flex-1" />
+              </div>
+              {form.thumbnail_url && (
+                <img src={form.thumbnail_url} alt="Thumbnail preview" className="mt-3 h-32 rounded-lg border object-cover" />
               )}
             </div>
 

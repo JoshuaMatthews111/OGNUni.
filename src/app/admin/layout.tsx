@@ -32,6 +32,7 @@ import {
   FileText,
   BarChart3,
   Shield,
+  Send,
 } from 'lucide-react'
 
 export default function AdminLayout({
@@ -96,7 +97,8 @@ export default function AdminLayout({
         { href: '/admin/quizzes', label: 'Quizzes & Tests', icon: ClipboardList },
         { href: '/admin/community', label: 'Discussions', icon: MessagesSquare },
         { href: '/admin/certificates', label: 'Certificates', icon: Award },
-        { href: '/admin/comments', label: 'Messages', icon: MessageSquare },
+        { href: '/admin/messages', label: 'Messages', icon: MessageSquare },
+        { href: '/admin/content', label: 'Content Sharing', icon: Send },
       ],
     },
     ...(isSuperAdmin ? [{

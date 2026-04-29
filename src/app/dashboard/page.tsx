@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import {
   BookOpen, Award, TrendingUp, MessageSquare, Play, Eye, ClipboardList,
-  Download, Lock, GraduationCap, Search, Bell, Calendar, CheckCircle
+  Download, Lock, GraduationCap, Search, Bell, Calendar, CheckCircle, FileText
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -92,6 +92,7 @@ export default function StudentDashboard() {
     { href: '/community', label: 'Discussions', icon: MessageSquare },
     { href: '/certificates', label: 'Certificates', icon: Award },
     { href: '/messages', label: 'Messages', icon: MessageSquare },
+    { href: '/resources', label: 'Resources', icon: FileText },
   ]
 
   const learningPath = COURSE_CATEGORIES.map((cat) => {

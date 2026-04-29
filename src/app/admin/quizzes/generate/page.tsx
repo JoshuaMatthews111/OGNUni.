@@ -91,6 +91,7 @@ export default function GenerateQuizPage() {
           title: generatedQuiz.title,
           description: generatedQuiz.description,
           passing_score: generatedQuiz.passing_score || 70,
+          is_published: true,
         })
         .select().single()
 

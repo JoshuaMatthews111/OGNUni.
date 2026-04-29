@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Search, MessageSquare, Clock, User, Send } from 'lucide-react'
+import { Search, MessageSquare, Clock, User, Send, BookOpen, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -14,6 +14,7 @@ import Link from 'next/link'
 export default function CommunityPage() {
   const supabase = createClient()
   const [posts, setPosts] = useState<any[]>([])
+  const [courses, setCourses] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
@@ -24,6 +25,7 @@ export default function CommunityPage() {
   useEffect(() => {
     loadPosts()
     loadUser()
+    loadNewCourses()
   }, [])
 
   const loadUser = async () => {
@@ -42,6 +44,16 @@ export default function CommunityPage() {
       .order('published_at', { ascending: false })
     setPosts(data || [])
     setLoading(false)
+  }
+
+  const loadNewCourses = async () => {
+    const { data } = await supabase
+      .from('courses')
+      .select('*, instructor:instructor_id(full_name)')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(5)
+    setCourses(data || [])
   }
 
   const loadComments = async (postId: string) => {
@@ -105,6 +117,41 @@ export default function CommunityPage() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
+        {/* New Courses Announcement Section */}
+        {courses.length > 0 && (
+          <div className="max-w-3xl mx-auto mb-8">
+            <h2 className="text-lg font-bold text-[#0a1628] mb-3 flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-[#c9a227]" /> New Courses Available
+            </h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {courses.slice(0, 3).map((course) => (
+                <Link key={course.id} href={`/courses/${course.slug}`}>
+                  <Card className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group h-full">
+                    <div className="h-24 relative">
+                      {course.thumbnail_url ? (
+                        <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-[#0a1628] to-[#1a3a5c] flex items-center justify-center">
+                          <BookOpen className="w-8 h-8 text-[#c9a227]/40" />
+                        </div>
+                      )}
+                      {course.is_free && <Badge className="absolute top-2 left-2 bg-green-600 text-white text-[10px]">FREE</Badge>}
+                    </div>
+                    <CardContent className="p-3">
+                      <h3 className="text-sm font-bold text-[#0a1628] line-clamp-1 group-hover:text-[#c9a227] transition-colors">{course.title}</h3>
+                      <p className="text-xs text-gray-500">{course.instructor?.full_name || 'OGN University'}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-[#c9a227] font-semibold">{course.is_free ? 'Free' : `$${parseFloat(course.price || 0).toFixed(2)}`}</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#c9a227] transition-colors" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-[#c9a227] border-t-transparent rounded-full animate-spin" /></div>
         ) : filtered.length === 0 ? (

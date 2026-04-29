@@ -24,7 +24,7 @@ export default function CoursesPage() {
     const { data } = await supabase
       .from('courses')
       .select('*, instructor:instructor_id(full_name)')
-      .eq('status', 'published')
+      .eq('is_published', true)
       .order('created_at', { ascending: false })
     setCourses(data || [])
     setLoading(false)

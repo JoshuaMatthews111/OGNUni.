@@ -151,6 +151,7 @@ export default function CoursePlayer() {
       .from('quizzes')
       .select('*, questions:quiz_questions(*)')
       .eq('lesson_id', lessonId)
+      .eq('is_published', true)
     setQuizzes(data || [])
     setQuizResult(null)
     setQuizAnswers({})

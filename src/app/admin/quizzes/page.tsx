@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Search, ClipboardList, CheckCircle, Clock, Eye } from 'lucide-react'
+import { Search, ClipboardList, CheckCircle, Clock, Eye, EyeOff, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 export default function AdminQuizzesPage() {
   const supabase = createClient()
@@ -26,6 +27,20 @@ export default function AdminQuizzesPage() {
     setQuizzes(quizRes.data || [])
     setAttempts(attemptsRes.data || [])
     setLoading(false)
+  }
+
+  const toggleQuizPublish = async (quizId: string, currentStatus: boolean) => {
+    const { error } = await supabase.from('quizzes').update({ is_published: !currentStatus }).eq('id', quizId)
+    if (error) toast.error('Failed to update quiz')
+    else { toast.success(`Quiz ${!currentStatus ? 'published' : 'unpublished'}!`); loadData() }
+  }
+
+  const deleteQuiz = async (quizId: string) => {
+    if (!confirm('Delete this quiz and all its questions?')) return
+    await supabase.from('quiz_questions').delete().eq('quiz_id', quizId)
+    const { error } = await supabase.from('quizzes').delete().eq('id', quizId)
+    if (error) toast.error('Failed to delete quiz')
+    else { toast.success('Quiz deleted!'); loadData() }
   }
 
   const filtered = quizzes.filter((q) =>
@@ -69,11 +84,21 @@ export default function AdminQuizzesPage() {
                 {filtered.map((quiz) => (
                   <div key={quiz.id} className="p-3 border rounded-lg hover:bg-gray-50">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-[#0a1628]">{quiz.title}</p>
-                        <p className="text-xs text-gray-500">{quiz.course?.title} • Pass: {quiz.passing_score}%</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-[#0a1628]">{quiz.title}</p>
+                          {quiz.is_published ? <Badge className="bg-green-600 text-white text-[10px]">Published</Badge> : <Badge variant="outline" className="text-[10px]">Draft</Badge>}
+                        </div>
+                        <p className="text-xs text-gray-500">{quiz.course?.title}{quiz.lesson?.title ? ` • ${quiz.lesson.title}` : ''} • Pass: {quiz.passing_score}%</p>
                       </div>
-                      <Badge className="bg-[#0a1628] text-[#c9a227]">{quiz.max_attempts} attempts</Badge>
+                      <div className="flex gap-1.5 ml-3">
+                        <Button variant="outline" size="sm" onClick={() => toggleQuizPublish(quiz.id, quiz.is_published || false)} title={quiz.is_published ? 'Unpublish' : 'Publish'}>
+                          {quiz.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => deleteQuiz(quiz.id)} title="Delete">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
