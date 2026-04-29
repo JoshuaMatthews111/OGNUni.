@@ -203,28 +203,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
             </div>
           )}
 
-          <button
-            onClick={() => handleSocialSignIn('google')}
-            className="w-full flex items-center justify-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Image
-              src="https://ext.same-assets.com/3152590629/3462967311.svg"
-              alt="Google"
-              width={20}
-              height={20}
-            />
-            <span className="font-medium">Continue with Google</span>
-          </button>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">or</span>
-            </div>
-          </div>
-
           <form onSubmit={mode === 'signin' ? handleSignIn : handleSignUp} className="space-y-4">
             {mode === 'signup' && (
               <div>
