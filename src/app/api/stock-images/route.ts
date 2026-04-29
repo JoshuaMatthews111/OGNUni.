@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Uses Unsplash Source (no auth required) + Unsplash public search
+// Simple hash to get deterministic seed from query
+function hashCode(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
 export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get('q')
   if (!query) {
@@ -8,32 +18,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Use Unsplash public API (no key needed for source URLs)
-    // Generate multiple image URLs using Unsplash Source
-    const images = []
-    const searchTerms = query.split(' ').slice(0, 4).join(',')
+    const images: any[] = []
+    const base = hashCode(query)
 
-    // Generate 8 different stock image options using Unsplash Source random
-    for (let i = 0; i < 8; i++) {
-      const seed = `${query}-${i}-${Date.now()}`
-      images.push({
-        id: `stock-${i}`,
-        url: `https://source.unsplash.com/featured/1280x720/?${encodeURIComponent(searchTerms)}&sig=${i}`,
-        thumb: `https://source.unsplash.com/featured/400x225/?${encodeURIComponent(searchTerms)}&sig=${i}`,
-        alt: `${query} stock photo ${i + 1}`,
-        credit: 'Unsplash',
-      })
-    }
-
-    // Also try Picsum as fallback (always works, no auth)
-    for (let i = 0; i < 4; i++) {
-      const seed = Math.floor(Math.random() * 1000)
+    // Picsum Photos - 100% reliable, free, no auth needed
+    // Deterministic seeds based on query so same search = consistent results
+    for (let i = 0; i < 12; i++) {
+      const seed = base + i * 37
       images.push({
         id: `picsum-${i}`,
         url: `https://picsum.photos/seed/${seed}/1280/720`,
         thumb: `https://picsum.photos/seed/${seed}/400/225`,
-        alt: `Random background ${i + 1}`,
-        credit: 'Picsum',
+        alt: `Background option ${i + 1}`,
+        credit: 'Picsum Photos',
       })
     }
 

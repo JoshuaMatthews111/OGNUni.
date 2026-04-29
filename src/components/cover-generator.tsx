@@ -112,14 +112,15 @@ export default function CoverGenerator({
     canvas.height = 720
 
     try {
-      // Load background image
+      // Load background image through proxy to avoid CORS
+      const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
       const img = new window.Image()
       img.crossOrigin = 'anonymous'
 
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve()
         img.onerror = () => reject(new Error('Image load failed'))
-        img.src = imageUrl
+        img.src = proxyUrl
       })
 
       // Draw background
@@ -317,7 +318,7 @@ export default function CoverGenerator({
                         {conceptStockImages.map((img) => (
                           <button key={img.id} onClick={() => renderCover(img.url, selectedConcept)} disabled={rendering}
                             className="relative aspect-video rounded-lg overflow-hidden border-2 border-transparent hover:border-[#c9a227] transition-all group">
-                            <img src={img.thumb} alt={img.alt} className="w-full h-full object-cover" loading="lazy" />
+                            <img src={`/api/image-proxy?url=${encodeURIComponent(img.thumb)}`} alt={img.alt} className="w-full h-full object-cover" loading="lazy" />
                             <div className="absolute inset-0 bg-[#0a1628]/0 group-hover:bg-[#0a1628]/40 transition-all flex items-center justify-center">
                               <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">Use this</span>
                             </div>
@@ -354,7 +355,7 @@ export default function CoverGenerator({
                     {stockImages.map((img) => (
                       <button key={img.id} onClick={() => renderCover(img.url)} disabled={rendering}
                         className="relative aspect-video rounded-lg overflow-hidden border-2 border-transparent hover:border-[#c9a227] transition-all group">
-                        <img src={img.thumb} alt={img.alt} className="w-full h-full object-cover" loading="lazy" />
+                        <img src={`/api/image-proxy?url=${encodeURIComponent(img.thumb)}`} alt={img.alt} className="w-full h-full object-cover" loading="lazy" />
                         <div className="absolute inset-0 bg-[#0a1628]/0 group-hover:bg-[#0a1628]/40 transition-all flex items-center justify-center">
                           <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">Apply branding</span>
                         </div>
