@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import Image from 'next/image'
 import { GraduationCap, BookOpen, Shield, Mail, KeyRound } from 'lucide-react'
 
 const ENABLE_GOOGLE_AUTH = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === 'true'
@@ -34,6 +33,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   const [seeding, setSeeding] = useState(false)
   const [loginMethod, setLoginMethod] = useState<'password' | 'magic_link'>('password')
   const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const [signupComplete, setSignupComplete] = useState(false)
 
   const supabase = createClient()
 
@@ -136,20 +136,29 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
     }
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
+    try {
+      const res = await fetch('/api/auth/send-magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          type: 'magic_link',
+          redirectUrl: `${window.location.origin}/auth/callback`,
+        }),
+      })
 
-    setLoading(false)
+      const result = await res.json()
+      setLoading(false)
 
-    if (error) {
-      toast.error(error.message)
-    } else {
-      setMagicLinkSent(true)
-      toast.success('Login link sent! Check your email inbox.')
+      if (res.ok) {
+        setMagicLinkSent(true)
+        toast.success('Login link sent! Check your email inbox.')
+      } else {
+        toast.error(result.error || 'Failed to send login link. Try again.')
+      }
+    } catch {
+      setLoading(false)
+      toast.error('Something went wrong. Please try again.')
     }
   }
 
@@ -171,7 +180,8 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
         const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
         setLoading(false)
         if (signInErr) {
-          toast.error('Account exists. ' + signInErr.message)
+          toast.error('An account with this email already exists. Try signing in or use a login link.')
+          onModeChange('signin')
         } else {
           toast.success('Welcome back!')
           onClose()
@@ -190,30 +200,42 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
       setLoading(false)
       toast.error(error.message)
     } else {
-      setLoading(false)
+      // Check if account already existed (identities empty)
       if (data?.user?.identities?.length === 0) {
-        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
-        if (signInErr) {
-          toast.error('An account with this email already exists. Please sign in instead.')
-          onModeChange('signin')
-        } else {
-          toast.success('Welcome back!')
-          onClose()
-          const { data: { user: authUser } } = await supabase.auth.getUser()
-          if (authUser) {
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', authUser.id).single()
-            if (profile && ['super_admin', 'prophet', 'teacher', 'minister'].includes(profile.role)) {
-              window.location.href = '/admin'
-              return
-            }
-          }
-          window.location.href = '/dashboard'
-        }
+        setLoading(false)
+        toast.error('An account with this email already exists. Please sign in.')
+        onModeChange('signin')
         return
       }
-      toast.success('Account created! Check your email to verify, then you can log in.')
-      try { await fetch('/api/email/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trigger: 'new_signup', data: { name: fullName, email } }) }) } catch {}
-      onClose()
+
+      // Sign out immediately - user must verify email first
+      await supabase.auth.signOut()
+
+      // Send verification email via our SendGrid API
+      try {
+        await fetch('/api/auth/send-magic-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            type: 'signup_verification',
+            name: fullName,
+            redirectUrl: `${window.location.origin}/auth/callback`,
+          }),
+        })
+      } catch {}
+
+      // Notify admin of new signup
+      try {
+        await fetch('/api/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trigger: 'new_signup', data: { name: fullName, email } }),
+        })
+      } catch {}
+
+      setLoading(false)
+      setSignupComplete(true)
     }
   }
 
@@ -353,23 +375,46 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
 
           {/* Sign Up Mode */}
           {mode === 'signup' && (
-            <form onSubmit={handleSignUp} className="space-y-4">
-              <div>
-                <Label htmlFor="fullName">Full Name *</Label>
-                <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" required />
-              </div>
-              <div>
-                <Label htmlFor="signup-email">Email *</Label>
-                <Input id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required />
-              </div>
-              <div>
-                <Label htmlFor="signup-password">Create Password *</Label>
-                <Input id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" required minLength={6} />
-              </div>
-              <Button type="submit" className="w-full bg-[#0a1628] hover:bg-[#c9a227] hover:text-[#0a1628] font-semibold" disabled={loading}>
-                {loading ? 'Creating account...' : 'Create Account'}
-              </Button>
-            </form>
+            <>
+              {signupComplete ? (
+                <div className="text-center py-6 space-y-3">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                    <Mail className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-[#0a1628]">Check your email!</h3>
+                  <p className="text-sm text-gray-600">We sent a verification link to:</p>
+                  <p className="font-semibold text-[#0a1628]">{email}</p>
+                  <p className="text-sm text-gray-500">Click the link in the email to verify your account and start learning.</p>
+                  <div className="border-t pt-3 mt-4">
+                    <p className="text-xs text-gray-400">Didn't get the email? Check your spam folder or</p>
+                    <button
+                      onClick={() => { setSignupComplete(false) }}
+                      className="text-xs text-[#c9a227] hover:underline font-semibold"
+                    >
+                      try again with a different email
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <div>
+                    <Label htmlFor="fullName">Full Name *</Label>
+                    <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" required />
+                  </div>
+                  <div>
+                    <Label htmlFor="signup-email">Email *</Label>
+                    <Input id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required />
+                  </div>
+                  <div>
+                    <Label htmlFor="signup-password">Create Password *</Label>
+                    <Input id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 characters" required minLength={6} />
+                  </div>
+                  <Button type="submit" className="w-full bg-[#0a1628] hover:bg-[#c9a227] hover:text-[#0a1628] font-semibold" disabled={loading}>
+                    {loading ? 'Creating account...' : 'Create Account'}
+                  </Button>
+                </form>
+              )}
+            </>
           )}
 
           {/* Google/Apple (only shown if enabled via env) */}
