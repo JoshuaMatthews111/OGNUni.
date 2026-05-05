@@ -146,11 +146,54 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
       },
     })
 
-    setLoading(false)
-
     if (error) {
+      // If account already exists, try signing them in instead
+      if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been registered') || error.message.toLowerCase().includes('user already registered')) {
+        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
+        setLoading(false)
+        if (signInErr) {
+          toast.error('Account exists. ' + signInErr.message)
+        } else {
+          toast.success('Welcome back!')
+          onClose()
+          const { data: { user: authUser } } = await supabase.auth.getUser()
+          if (authUser) {
+            const { data: profile } = await supabase.from('profiles').select('role').eq('id', authUser.id).single()
+            if (profile && ['super_admin', 'prophet', 'teacher', 'minister'].includes(profile.role)) {
+              window.location.href = '/admin'
+              return
+            }
+          }
+          window.location.href = '/dashboard'
+        }
+        return
+      }
+      setLoading(false)
       toast.error(error.message)
     } else {
+      setLoading(false)
+      // Supabase returns user with identities=[] if email already exists (no error thrown)
+      if (data?.user?.identities?.length === 0) {
+        // Account exists, try auto-login
+        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
+        if (signInErr) {
+          toast.error('An account with this email already exists. Please sign in instead.')
+          onModeChange('signin')
+        } else {
+          toast.success('Welcome back!')
+          onClose()
+          const { data: { user: authUser } } = await supabase.auth.getUser()
+          if (authUser) {
+            const { data: profile } = await supabase.from('profiles').select('role').eq('id', authUser.id).single()
+            if (profile && ['super_admin', 'prophet', 'teacher', 'minister'].includes(profile.role)) {
+              window.location.href = '/admin'
+              return
+            }
+          }
+          window.location.href = '/dashboard'
+        }
+        return
+      }
       toast.success('Account created! Please check your email to verify.')
       // Trigger welcome email
       try { await fetch('/api/email/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trigger: 'new_signup', data: { name: fullName, email } }) }) } catch {}
@@ -167,7 +210,14 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
     })
 
     if (error) {
-      toast.error(error.message)
+      if (error.message.includes('not enabled') || error.message.includes('Unsupported provider')) {
+        toast.error(
+          `${provider === 'google' ? 'Google' : 'Apple'} login is not yet configured. Please use email and password to sign in.`,
+          { duration: 5000 }
+        )
+      } else {
+        toast.error(error.message)
+      }
     }
   }
 
