@@ -3,9 +3,7 @@ const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'prophetjoshuamatthews@gma
 const FROM_NAME = 'OGN University'
 export const ADMIN_EMAIL = 'prophetjoshuamatthews@gmail.com'
 
-const LOGO_URL = process.env.NEXT_PUBLIC_APP_URL
-  ? `${process.env.NEXT_PUBLIC_APP_URL}/assets/ogn-logo-small.png`
-  : 'https://jsnyvccyghfpjwhvjfyr.supabase.co/storage/v1/object/public/course-thumbnails/ogn-logo.png'
+const LOGO_URL = 'https://ognuniversity.com/assets/ogn-logo-small.png'
 
 // HTML email wrapper with OGN branding
 function wrapInTemplate(body: string, subject: string): string {

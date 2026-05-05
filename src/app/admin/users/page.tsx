@@ -176,9 +176,7 @@ export default function AdminUsersPage() {
   }
 
   const getStatusBadge = (user: User) => {
-    if (user.status === 'suspended') return <Badge className="bg-red-100 text-red-700 text-xs">Suspended</Badge>
-    if (user.status === 'paused') return <Badge className="bg-yellow-100 text-yellow-700 text-xs">Paused</Badge>
-    if (user.is_active === false) return <Badge className="bg-red-100 text-red-700 text-xs">Inactive</Badge>
+    if (user.is_active === false) return <Badge className="bg-red-100 text-red-700 text-xs">Suspended</Badge>
     return null
   }
 
@@ -296,17 +294,12 @@ export default function AdminUsersPage() {
                       </Button>
                       {activeMenu === user.id && (
                         <div className="absolute right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-50 w-48 py-1">
-                          {user.status !== 'paused' && user.is_active !== false && (
-                            <button onClick={() => handleUserAction(user.id, 'pause')} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
-                              <Pause className="w-3.5 h-3.5 text-yellow-600" /> Pause User
-                            </button>
-                          )}
-                          {user.status !== 'suspended' && (
+                          {user.is_active !== false && (
                             <button onClick={() => handleUserAction(user.id, 'suspend')} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
                               <Ban className="w-3.5 h-3.5 text-red-600" /> Suspend User
                             </button>
                           )}
-                          {(user.status === 'paused' || user.status === 'suspended' || user.is_active === false) && (
+                          {user.is_active === false && (
                             <button onClick={() => handleUserAction(user.id, 'activate')} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
                               <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Activate User
                             </button>

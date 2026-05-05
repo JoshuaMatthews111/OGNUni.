@@ -31,8 +31,6 @@ export async function PATCH(request: Request) {
         .update({ is_active: false })
         .eq('id', userId)
       if (profileError) throw profileError
-      // Try to set status (column may not exist yet)
-      await supabase.from('profiles').update({ status: 'suspended' } as any).eq('id', userId).then(() => {})
 
       // Ban user in Supabase Auth
       await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
@@ -54,7 +52,6 @@ export async function PATCH(request: Request) {
         .update({ is_active: false })
         .eq('id', userId)
       if (error) throw error
-      await supabase.from('profiles').update({ status: 'paused' } as any).eq('id', userId).then(() => {})
       return NextResponse.json({ success: true, message: 'User paused' })
     }
 
@@ -64,7 +61,6 @@ export async function PATCH(request: Request) {
         .update({ is_active: true })
         .eq('id', userId)
       if (profileError) throw profileError
-      await supabase.from('profiles').update({ status: 'active' } as any).eq('id', userId).then(() => {})
 
       // Unban user in Supabase Auth
       await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
