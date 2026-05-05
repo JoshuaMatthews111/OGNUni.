@@ -24,6 +24,10 @@ import {
   ArrowLeft,
   Menu,
   X,
+  Music,
+  Video,
+  Download,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { youtubeEmbedUrl } from '@/lib/constants'
@@ -337,6 +341,9 @@ export default function CoursePlayer() {
                           {lesson.is_completed ? <CheckCircle className="w-3.5 h-3.5 shrink-0" /> : <Circle className="w-3.5 h-3.5 shrink-0" />}
                           <span className="flex-1 truncate">{lesson.title}</span>
                           {lesson.youtube_embed_id && <Youtube className="w-3.5 h-3.5 shrink-0 text-red-500" />}
+                          {lesson.vimeo_url && <Video className="w-3.5 h-3.5 shrink-0 text-blue-500" />}
+                          {lesson.audio_url && <Music className="w-3.5 h-3.5 shrink-0 text-green-500" />}
+                          {lesson.pdf_url && <FileText className="w-3.5 h-3.5 shrink-0 text-orange-500" />}
                         </button>
                       ))}
                     </div>
@@ -352,6 +359,7 @@ export default function CoursePlayer() {
           {/* Video / Content */}
           <Card>
             <CardContent className="p-0">
+              {/* YouTube */}
               {currentLesson.youtube_embed_id && (
                 <div className="aspect-video bg-black rounded-t-lg overflow-hidden">
                   <iframe
@@ -361,6 +369,79 @@ export default function CoursePlayer() {
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     title={currentLesson.title}
                   />
+                </div>
+              )}
+
+              {/* Vimeo */}
+              {currentLesson.vimeo_url && !currentLesson.youtube_embed_id && (
+                <div className="aspect-video bg-black rounded-t-lg overflow-hidden">
+                  <iframe
+                    src={`https://player.vimeo.com/video/${currentLesson.vimeo_url.split('/').pop()}`}
+                    className="w-full h-full"
+                    allowFullScreen
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    title={currentLesson.title}
+                  />
+                </div>
+              )}
+
+              {/* Audio Player - supports background playback on mobile */}
+              {currentLesson.audio_url && (
+                <div className="bg-gradient-to-r from-[#0a1628] to-[#1a3a5c] p-6 rounded-t-lg">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-16 h-16 rounded-full bg-[#c9a227]/20 flex items-center justify-center">
+                      <Music className="w-8 h-8 text-[#c9a227]" />
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold">{currentLesson.title}</p>
+                      <p className="text-gray-400 text-xs">Audio lesson • Background playback enabled</p>
+                    </div>
+                  </div>
+                  <audio
+                    controls
+                    className="w-full"
+                    preload="metadata"
+                    controlsList="nodownload"
+                    style={{ filter: 'invert(1) hue-rotate(180deg)' }}
+                  >
+                    <source src={currentLesson.audio_url} />
+                    Your browser does not support audio playback.
+                  </audio>
+                </div>
+              )}
+
+              {/* PDF Viewer */}
+              {currentLesson.pdf_url && (
+                <div className="border-b">
+                  {currentLesson.pdf_url.endsWith('.pdf') ? (
+                    <div>
+                      <iframe
+                        src={`${currentLesson.pdf_url}#toolbar=1&navpanes=1&scrollbar=1`}
+                        className="w-full h-[70vh] min-h-[500px]"
+                        title={`${currentLesson.title} - PDF`}
+                      />
+                      <div className="p-3 bg-gray-50 flex items-center justify-between">
+                        <span className="text-xs text-gray-500 flex items-center gap-1"><FileText className="w-3 h-3" /> PDF Document</span>
+                        <div className="flex gap-2">
+                          <a href={currentLesson.pdf_url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#c9a227] hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" /> Open in new tab</a>
+                          <a href={currentLesson.pdf_url} download className="text-xs text-[#0a1628] hover:underline flex items-center gap-1"><Download className="w-3 h-3" /> Download</a>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center">
+                      <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                      <p className="text-sm font-medium text-[#0a1628] mb-2">{currentLesson.title}</p>
+                      <div className="flex gap-3 justify-center">
+                        <a href={currentLesson.pdf_url} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm"><ExternalLink className="w-4 h-4 mr-1" /> View Document</Button>
+                        </a>
+                        <a href={currentLesson.pdf_url} download>
+                          <Button size="sm" className="bg-[#0a1628] text-white"><Download className="w-4 h-4 mr-1" /> Download</Button>
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

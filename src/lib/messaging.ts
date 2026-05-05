@@ -31,6 +31,23 @@ export async function sendMessageWithMedia(
       .from('conversations')
       .update({ last_message_at: new Date().toISOString() })
       .eq('id', payload.conversation_id)
+
+    // Trigger email notification (non-blocking, won't crash if it fails)
+    try {
+      // Get recipient info from conversation
+      const { data: conv } = await supabase.from('conversations').select('participant_1_id, participant_2_id').eq('id', payload.conversation_id).single()
+      if (conv) {
+        const recipientId = conv.participant_1_id === payload.sender_id ? conv.participant_2_id : conv.participant_1_id
+        const { data: sender } = await supabase.from('profiles').select('full_name').eq('id', payload.sender_id).single()
+        const { data: recipient } = await supabase.from('profiles').select('full_name, email:id').eq('id', recipientId).single()
+        if (sender && recipient) {
+          fetch('/api/email/send', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trigger: 'new_message', data: { senderName: sender.full_name || 'A user', preview: payload.content, recipientEmail: '', recipientName: recipient.full_name } }),
+          }).catch(() => {})
+        }
+      }
+    } catch {}
   }
 
   return { error }
