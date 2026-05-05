@@ -20,6 +20,15 @@ export async function GET(request: Request) {
       const message = encodeURIComponent(sessionError.message)
       return NextResponse.redirect(requestUrl.origin + `/?auth_error=${message}`)
     }
+
+    // Check user role to redirect appropriately
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile && ['super_admin', 'prophet', 'teacher', 'minister'].includes(profile.role)) {
+        return NextResponse.redirect(requestUrl.origin + '/admin')
+      }
+    }
   }
 
   // Redirect to dashboard after successful authentication
