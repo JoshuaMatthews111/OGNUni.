@@ -202,22 +202,30 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   }
 
   const handleSocialSignIn = async (provider: 'google' | 'apple') => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        skipBrowserRedirect: true,
       },
     })
 
     if (error) {
-      if (error.message.includes('not enabled') || error.message.includes('Unsupported provider')) {
+      const msg = error.message || JSON.stringify(error)
+      if (msg.includes('not enabled') || msg.includes('Unsupported provider') || msg.includes('validation_failed') || msg.includes('provider')) {
         toast.error(
           `${provider === 'google' ? 'Google' : 'Apple'} login is not yet configured. Please use email and password to sign in.`,
           { duration: 5000 }
         )
       } else {
-        toast.error(error.message)
+        toast.error(msg)
       }
+      return
+    }
+
+    // If we got a URL back, redirect manually
+    if (data?.url) {
+      window.location.href = data.url
     }
   }
 
