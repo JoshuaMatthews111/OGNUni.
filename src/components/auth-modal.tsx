@@ -195,76 +195,31 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
     e.preventDefault()
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
+    try {
+      // Use our API to create the user (bypasses Supabase's built-in email)
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name: fullName }),
+      })
+      const result = await res.json()
 
-    if (error) {
-      if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been registered') || error.message.toLowerCase().includes('user already registered')) {
-        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
+      if (!res.ok) {
         setLoading(false)
-        if (signInErr) {
-          toast.error('An account with this email already exists. Try signing in or use a login link.')
+        if (result.error?.includes('already') || result.code === 'user_exists') {
+          toast.error('An account with this email already exists. Try signing in.')
           onModeChange('signin')
         } else {
-          toast.success('Welcome back!')
-          onClose()
-          const { data: { user: authUser } } = await supabase.auth.getUser()
-          if (authUser) {
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', authUser.id).single()
-            if (profile && ['super_admin', 'prophet', 'teacher', 'minister'].includes(profile.role)) {
-              window.location.href = '/admin'
-              return
-            }
-          }
-          window.location.href = '/dashboard'
+          toast.error(result.error || 'Sign up failed. Please try again.')
         }
         return
       }
-      setLoading(false)
-      toast.error(error.message)
-    } else {
-      // Check if account already existed (identities empty)
-      if (data?.user?.identities?.length === 0) {
-        setLoading(false)
-        toast.error('An account with this email already exists. Please sign in.')
-        onModeChange('signin')
-        return
-      }
-
-      // Sign out immediately - user must verify email first
-      await supabase.auth.signOut()
-
-      // Send verification email via our SendGrid API
-      try {
-        await fetch('/api/auth/send-magic-link', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            type: 'signup_verification',
-            name: fullName,
-            redirectUrl: `${window.location.origin}/auth/callback`,
-          }),
-        })
-      } catch {}
-
-      // Notify admin of new signup
-      try {
-        await fetch('/api/email/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trigger: 'new_signup', data: { name: fullName, email } }),
-        })
-      } catch {}
 
       setLoading(false)
       setSignupComplete(true)
+    } catch {
+      setLoading(false)
+      toast.error('Something went wrong. Please try again.')
     }
   }
 

@@ -39,14 +39,18 @@ export async function GET(request: Request) {
     if (!profile) {
       // First-time user — create profile
       const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User'
+      const assignedRole = user.user_metadata?.assigned_role || 'student'
       await supabase.from('profiles').insert({
         id: user.id,
         email: user.email,
         full_name: fullName,
-        role: 'student',
+        role: assignedRole,
         is_active: true,
       })
-      // Redirect new students to dashboard
+      // Redirect based on assigned role
+      if (['super_admin', 'prophet', 'teacher', 'minister'].includes(assignedRole)) {
+        return NextResponse.redirect(requestUrl.origin + '/admin')
+      }
       return NextResponse.redirect(requestUrl.origin + '/dashboard')
     }
 

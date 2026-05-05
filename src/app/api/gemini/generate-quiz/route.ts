@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+import { generateWithRetry } from '@/lib/ai'
 
 export async function POST(request: Request) {
   try {
@@ -10,8 +8,6 @@ export async function POST(request: Request) {
     if (!lessonTitle) {
       return NextResponse.json({ error: 'Lesson title is required' }, { status: 400 })
     }
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `You are a Christian seminary professor at Overcomers Global Network University. Generate a quiz for the following lesson.
 
@@ -64,8 +60,7 @@ REQUIREMENTS:
 - Spiritual application questions should ask students to apply the lesson to their life/ministry
 - Return ONLY valid JSON, no markdown, no code fences`
 
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
+    const text = await generateWithRetry(prompt)
 
     // Clean potential markdown code fences
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()

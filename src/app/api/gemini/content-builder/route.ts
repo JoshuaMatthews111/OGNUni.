@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+import { generateWithRetry } from '@/lib/ai'
 
 export async function POST(request: Request) {
   try {
@@ -10,8 +8,6 @@ export async function POST(request: Request) {
     if (!transcript) {
       return NextResponse.json({ error: 'Transcript is required' }, { status: 400 })
     }
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     let prompt = ''
 
@@ -144,8 +140,7 @@ Format using clean markdown.`
         prompt = `Summarize the following transcript into a well-structured document:\n\n${transcript.substring(0, 15000)}`
     }
 
-    const result = await model.generateContent(prompt)
-    const content = result.response.text()
+    const content = await generateWithRetry(prompt)
 
     return NextResponse.json({
       content,

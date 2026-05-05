@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { sendEmail } from '@/lib/email'
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ognuniversity.com'
+// Hardcoded to prevent any env var issues on Vercel
+const SITE_URL = 'https://ognuniversity.com'
 
 // Convert Supabase action link to our own /auth/confirm endpoint
 // Supabase returns: https://supabase.co/auth/v1/verify?token=xxx&type=yyy&redirect_to=localhost

@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+import { generateWithRetry } from '@/lib/ai'
 
 export async function POST(request: Request) {
   try {
@@ -10,8 +8,6 @@ export async function POST(request: Request) {
     if (!lessonTitle) {
       return NextResponse.json({ error: 'Lesson title is required' }, { status: 400 })
     }
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `You are a Christian seminary curriculum designer at Overcomers Global Network University. Generate a complete lesson template.
 
@@ -57,8 +53,7 @@ REQUIREMENTS:
 - Reflection prompt should be personal and ministry-focused
 - Return ONLY valid JSON, no markdown fences`
 
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
+    const text = await generateWithRetry(prompt)
 
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     const template = JSON.parse(cleaned)

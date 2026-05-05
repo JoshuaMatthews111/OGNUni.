@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+import { generateWithRetry } from '@/lib/ai'
 
 export async function POST(request: Request) {
   try {
@@ -10,8 +8,6 @@ export async function POST(request: Request) {
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     const prompt = `You are a professional graphic design director for a premium Christian university called "OGN University" (Overcomers Global Network).
 
@@ -52,8 +48,7 @@ Return as JSON array with exactly 4 objects:
 
 Return ONLY the JSON array, no markdown, no explanation.`
 
-    const result = await model.generateContent(prompt)
-    const text = result.response.text().trim()
+    const text = (await generateWithRetry(prompt)).trim()
 
     // Parse JSON from response
     let concepts
