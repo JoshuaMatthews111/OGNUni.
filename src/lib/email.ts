@@ -1,9 +1,11 @@
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY!
-const FROM_EMAIL = 'noreply@ognuniversity.com'
+const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'prophetjoshuamatthews@gmail.com'
 const FROM_NAME = 'OGN University'
 export const ADMIN_EMAIL = 'prophetjoshuamatthews@gmail.com'
 
-const LOGO_URL = 'https://jsnyvccyghfpjwhvjfyr.supabase.co/storage/v1/object/public/course-thumbnails/ogn-logo.png'
+const LOGO_URL = process.env.NEXT_PUBLIC_APP_URL
+  ? `${process.env.NEXT_PUBLIC_APP_URL}/assets/ogn-logo-small.png`
+  : 'https://jsnyvccyghfpjwhvjfyr.supabase.co/storage/v1/object/public/course-thumbnails/ogn-logo.png'
 
 // HTML email wrapper with OGN branding
 function wrapInTemplate(body: string, subject: string): string {
@@ -25,6 +27,7 @@ function wrapInTemplate(body: string, subject: string): string {
 </style></head>
 <body><div class="container">
   <div class="header">
+    <img src="${LOGO_URL}" alt="OGN University" width="80" height="80" style="display:block;margin:0 auto 12px;border-radius:50%">
     <h1>OGN UNIVERSITY</h1>
     <p>OVERCOMERS GLOBAL NETWORK</p>
   </div>
