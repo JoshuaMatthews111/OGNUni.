@@ -34,6 +34,8 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   const [loginMethod, setLoginMethod] = useState<'password' | 'magic_link'>('password')
   const [magicLinkSent, setMagicLinkSent] = useState(false)
   const [signupComplete, setSignupComplete] = useState(false)
+  const [forgotPassword, setForgotPassword] = useState(false)
+  const [resetEmailSent, setResetEmailSent] = useState(false)
 
   const supabase = createClient()
 
@@ -125,6 +127,33 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
         }
       }
       window.location.href = '/dashboard'
+    }
+  }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) {
+      toast.error('Please enter your email address')
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/send-magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, type: 'forgot_password' }),
+      })
+      const result = await res.json()
+      setLoading(false)
+      if (res.ok) {
+        setResetEmailSent(true)
+        toast.success('Password reset link sent! Check your email.')
+      } else {
+        toast.error(result.error || 'Failed to send reset link.')
+      }
+    } catch {
+      setLoading(false)
+      toast.error('Something went wrong. Please try again.')
     }
   }
 
@@ -326,7 +355,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
               </div>
 
               {/* Password Login */}
-              {loginMethod === 'password' && (
+              {loginMethod === 'password' && !forgotPassword && (
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div>
                     <Label htmlFor="email">Email *</Label>
@@ -339,7 +368,46 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                   <Button type="submit" className="w-full bg-[#0a1628] hover:bg-[#c9a227] hover:text-[#0a1628] font-semibold" disabled={loading}>
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
+                  <div className="text-center">
+                    <button type="button" onClick={() => setForgotPassword(true)} className="text-xs text-[#c9a227] hover:underline">
+                      Forgot your password?
+                    </button>
+                  </div>
                 </form>
+              )}
+
+              {/* Forgot Password */}
+              {loginMethod === 'password' && forgotPassword && (
+                <>
+                  {resetEmailSent ? (
+                    <div className="text-center py-6 space-y-3">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                        <Mail className="w-8 h-8 text-green-600" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-[#0a1628]">Reset link sent!</h3>
+                      <p className="text-sm text-gray-500">Check your email for the password reset link.</p>
+                      <button onClick={() => { setForgotPassword(false); setResetEmailSent(false) }} className="text-xs text-[#c9a227] hover:underline">
+                        Back to sign in
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                      <p className="text-sm text-gray-600 text-center">Enter your email and we'll send you a link to reset your password.</p>
+                      <div>
+                        <Label htmlFor="reset-email">Email *</Label>
+                        <Input id="reset-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" required />
+                      </div>
+                      <Button type="submit" className="w-full bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold" disabled={loading}>
+                        {loading ? 'Sending...' : 'Send Reset Link'}
+                      </Button>
+                      <div className="text-center">
+                        <button type="button" onClick={() => setForgotPassword(false)} className="text-xs text-gray-500 hover:underline">
+                          Back to sign in
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </>
               )}
 
               {/* Magic Link Login */}

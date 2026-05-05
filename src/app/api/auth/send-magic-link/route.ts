@@ -3,25 +3,19 @@ import { sendEmail } from '@/lib/email'
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ognuniversity.com'
 
-// Fix the redirect_to parameter inside Supabase action links to point to our live site
-function fixActionLink(link: string): string {
-  if (!link) return link
+// Convert Supabase action link to our own /auth/confirm endpoint
+// Supabase returns: https://supabase.co/auth/v1/verify?token=xxx&type=yyy&redirect_to=localhost
+// We convert to: https://ognuniversity.com/auth/confirm?token_hash=xxx&type=yyy
+function buildConfirmLink(supabaseLink: string): string {
+  if (!supabaseLink) return `${SITE_URL}/auth/confirm`
   try {
-    const url = new URL(link)
-    // The action link is on Supabase's domain (correct), but the redirect_to inside it points to localhost
-    // Fix the redirect_to param to point to our live site callback
-    const redirectTo = url.searchParams.get('redirect_to')
-    if (redirectTo && (redirectTo.includes('localhost') || redirectTo.includes('127.0.0.1'))) {
-      url.searchParams.set('redirect_to', `${SITE_URL}/auth/callback`)
-    } else if (!redirectTo) {
-      url.searchParams.set('redirect_to', `${SITE_URL}/auth/callback`)
-    }
-    return url.toString()
+    const url = new URL(supabaseLink)
+    const token = url.searchParams.get('token')
+    const type = url.searchParams.get('type') || 'magiclink'
+    // Build our own confirm URL that bypasses Supabase redirect entirely
+    return `${SITE_URL}/auth/confirm?token_hash=${token}&type=${type}`
   } catch {
-    // If URL parsing fails, do string replacement on redirect_to
-    return link
-      .replace('redirect_to=http%3A%2F%2Flocalhost%3A3000', `redirect_to=${encodeURIComponent(SITE_URL + '/auth/callback')}`)
-      .replace('redirect_to=http://localhost:3000', `redirect_to=${SITE_URL}/auth/callback`)
+    return `${SITE_URL}/auth/confirm`
   }
 }
 
@@ -67,7 +61,7 @@ export async function POST(request: Request) {
       }
 
       const linkData = await linkRes.json()
-      const actionLink = fixActionLink(linkData.action_link)
+      const actionLink = buildConfirmLink(linkData.action_link)
 
       if (!actionLink) {
         return NextResponse.json({ error: 'No link generated' }, { status: 500 })
@@ -116,7 +110,7 @@ export async function POST(request: Request) {
         if (linkRes.ok) {
           const data = await linkRes.json()
           if (data.action_link) {
-            actionLink = fixActionLink(data.action_link)
+            actionLink = buildConfirmLink(data.action_link)
             break
           }
         }
@@ -161,9 +155,51 @@ export async function POST(request: Request) {
       })
 
       return NextResponse.json({ success: true, message: 'Verification email sent' })
+
+    } else if (type === 'forgot_password') {
+      // Generate password recovery link
+      const linkRes = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          type: 'recovery',
+          email,
+          options: {
+            redirectTo: `${SITE_URL}/auth/reset-password`,
+          },
+        }),
+      })
+
+      if (!linkRes.ok) {
+        const errBody = await linkRes.text()
+        console.error('Generate recovery link failed:', errBody)
+        return NextResponse.json({ error: 'Failed to send reset link. Make sure the email is registered.' }, { status: 500 })
+      }
+
+      const linkData = await linkRes.json()
+      const recoveryLink = buildConfirmLink(linkData.action_link)
+
+      await sendEmail({
+        to: email,
+        subject: 'Reset Your OGN University Password',
+        htmlBody: `<h2>Password Reset Request</h2>
+          <p>We received a request to reset the password for your OGN University account.</p>
+          <p><strong>Click the button below to set a new password:</strong></p>
+          <a href="${recoveryLink}" class="btn">Reset My Password</a>
+          <p style="margin-top:25px;font-size:13px;color:#555">This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email — your password will remain unchanged.</p>
+          <p style="font-size:12px;color:#999;margin-top:15px">Having trouble? Copy and paste this link:<br><span style="word-break:break-all;color:#0B1C3D">${recoveryLink}</span></p>`,
+        templateType: 'password_reset',
+        metadata: { email },
+      })
+
+      return NextResponse.json({ success: true, message: 'Password reset link sent' })
     }
 
-    return NextResponse.json({ error: 'Invalid type. Use magic_link or signup_verification' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
   } catch (error: any) {
     console.error('Auth email error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
