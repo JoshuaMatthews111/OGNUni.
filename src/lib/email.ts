@@ -1,6 +1,6 @@
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY!
-// Hardcoded: noreply@ognuniversity.com is NOT verified in SendGrid, use prophetjoshuamatthews which IS verified
-const FROM_EMAIL = 'prophetjoshuamatthews@gmail.com'
+// Verified sender in SendGrid
+const FROM_EMAIL = 'ognuniversity@overcomersglobalnetwork.com'
 const FROM_NAME = 'OGN University'
 export const ADMIN_EMAIL = 'prophetjoshuamatthews@gmail.com'
 
