@@ -3,23 +3,25 @@ import { sendEmail } from '@/lib/email'
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ognuniversity.com'
 
-// Rewrite Supabase action links to point to our live site instead of localhost
+// Fix the redirect_to parameter inside Supabase action links to point to our live site
 function fixActionLink(link: string): string {
   if (!link) return link
   try {
     const url = new URL(link)
-    const siteUrl = new URL(SITE_URL)
-    // Replace host with our site
-    url.protocol = siteUrl.protocol
-    url.host = siteUrl.host
-    url.port = ''
+    // The action link is on Supabase's domain (correct), but the redirect_to inside it points to localhost
+    // Fix the redirect_to param to point to our live site callback
+    const redirectTo = url.searchParams.get('redirect_to')
+    if (redirectTo && (redirectTo.includes('localhost') || redirectTo.includes('127.0.0.1'))) {
+      url.searchParams.set('redirect_to', `${SITE_URL}/auth/callback`)
+    } else if (!redirectTo) {
+      url.searchParams.set('redirect_to', `${SITE_URL}/auth/callback`)
+    }
     return url.toString()
   } catch {
-    // If URL parsing fails, do string replacement
+    // If URL parsing fails, do string replacement on redirect_to
     return link
-      .replace('http://localhost:3000', SITE_URL)
-      .replace('http://localhost:54321', SITE_URL)
-      .replace('http://127.0.0.1:3000', SITE_URL)
+      .replace('redirect_to=http%3A%2F%2Flocalhost%3A3000', `redirect_to=${encodeURIComponent(SITE_URL + '/auth/callback')}`)
+      .replace('redirect_to=http://localhost:3000', `redirect_to=${SITE_URL}/auth/callback`)
   }
 }
 
