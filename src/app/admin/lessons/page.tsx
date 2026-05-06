@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Search, FileText, Youtube, Plus } from 'lucide-react'
+import { Search, FileText, Youtube, Plus, Wand2, Music, Video } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AdminLessonsPage() {
@@ -39,12 +39,12 @@ export default function AdminLessonsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0a1628]">Lessons</h1>
-          <p className="text-sm text-gray-500">{lessons.length} total lessons</p>
+          <h1 className="text-2xl font-bold text-[#0a1628]">Content Creator</h1>
+          <p className="text-sm text-gray-500">Create and manage lesson content, guides, quizzes, and course material — {lessons.length} items</p>
         </div>
         <Link href="/admin/lessons/new">
           <Button className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold">
-            <Plus className="w-4 h-4 mr-2" /> Add Lesson
+            <Wand2 className="w-4 h-4 mr-2" /> Create Content
           </Button>
         </Link>
       </div>

@@ -32,7 +32,7 @@ export default function AboutPage() {
                   We are committed to equipping believers with the knowledge, wisdom, and spiritual tools needed to grow in their walk with Christ. Our mission is to provide transformative biblical education that empowers you to fulfill your divine calling and live victoriously in both ministry and everyday life.
                 </p>
                 <p>
-                  Located in Painesville, Ohio — about 40 minutes from Cleveland — Overcomers Global Network University is not just an educational institution but a spiritual hub for believers seeking deeper growth. In addition to our courses, we offer in-person workshops and regular church services through Overcomers Global Network, providing a complete environment for learning, worship, and fellowship.
+                  Located at 7519 Mentor Ave, Suite A106, Mentor, Ohio 44060 — Overcomers Global Network University is not just an educational institution but a spiritual hub for believers seeking deeper growth. In addition to our courses, we offer in-person workshops and regular church services through Overcomers Global Network, providing a complete environment for learning, worship, and fellowship.
                 </p>
               </div>
             </div>

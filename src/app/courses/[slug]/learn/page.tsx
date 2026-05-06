@@ -316,12 +316,12 @@ export default function CoursePlayer() {
         </div>
       </div>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className={`${sidebarOpen ? 'w-72' : 'w-0'} bg-white border-r transition-all duration-300 sticky top-[52px] h-[calc(100vh-52px)] overflow-y-auto overflow-x-hidden shrink-0`}>
-          {sidebarOpen && (
-            <div className="p-4">
-              <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">COURSE CONTENT</p>
+      <div className="flex relative">
+        {/* Sidebar - mobile overlay */}
+        {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+        <aside className={`${sidebarOpen ? 'w-72 translate-x-0' : '-translate-x-full lg:translate-x-0'} fixed lg:sticky top-[52px] left-0 w-72 h-[calc(100vh-52px)] bg-white border-r transition-transform duration-300 overflow-y-auto overflow-x-hidden shrink-0 z-40 lg:z-auto`}>
+          <div className="p-4">
+            <p className="text-xs text-gray-500 font-semibold tracking-wider mb-3">COURSE CONTENT</p>
               {modules.map((mod) => (
                 <div key={mod.id} className="mb-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -350,12 +350,11 @@ export default function CoursePlayer() {
                   )}
                 </div>
               ))}
-            </div>
-          )}
+          </div>
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 p-4 lg:p-8 space-y-6">
+        <main className="flex-1 min-w-0 w-full max-w-full overflow-x-hidden p-3 sm:p-4 lg:p-8 space-y-4 sm:space-y-6">
           {/* Video / Content */}
           <Card>
             <CardContent className="p-0">
@@ -445,19 +444,19 @@ export default function CoursePlayer() {
                 </div>
               )}
 
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-[#0a1628]">{currentLesson.title}</h2>
+              <div className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold text-[#0a1628]">{currentLesson.title}</h2>
                     {currentLesson.description && <p className="text-sm text-gray-500 mt-1">{currentLesson.description}</p>}
                     {currentLesson.scripture_references && (
                       <p className="text-xs text-[#c9a227] mt-1">📖 {currentLesson.scripture_references}</p>
                     )}
                   </div>
                   {currentLesson.is_completed ? (
-                    <Badge className="bg-green-600 text-white"><CheckCircle className="w-3 h-3 mr-1" /> Completed</Badge>
+                    <Badge className="bg-green-600 text-white self-start"><CheckCircle className="w-3 h-3 mr-1" /> Completed</Badge>
                   ) : (
-                    <Button onClick={() => markLessonComplete(currentLesson.id)} className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold">
+                    <Button onClick={() => markLessonComplete(currentLesson.id)} className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold w-full sm:w-auto" size="sm">
                       <CheckCircle className="w-4 h-4 mr-2" /> Mark Complete
                     </Button>
                   )}
@@ -541,9 +540,22 @@ export default function CoursePlayer() {
           {/* Notes Tab */}
           {activeTab === 'notes' && (
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6 md:p-8 lg:p-10">
                 {currentLesson.lesson_notes ? (
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">{currentLesson.lesson_notes}</div>
+                  <article className="max-w-2xl mx-auto">
+                    <div className="prose prose-sm sm:prose-base max-w-none
+                      prose-headings:text-[#0a1628] prose-headings:font-serif
+                      prose-p:text-gray-700 prose-p:leading-relaxed prose-p:text-[15px] sm:prose-p:text-base
+                      prose-li:text-gray-700 prose-li:leading-relaxed
+                      prose-strong:text-[#0a1628]
+                      whitespace-pre-wrap break-words
+                      leading-[1.8] sm:leading-[1.9] tracking-[0.01em]
+                      text-[15px] sm:text-base text-gray-700 font-[system-ui]"
+                      style={{ wordSpacing: '0.05em' }}
+                    >
+                      {currentLesson.lesson_notes}
+                    </div>
+                  </article>
                 ) : (
                   <p className="text-gray-400 text-center py-8">No lesson notes available.</p>
                 )}
@@ -565,10 +577,19 @@ export default function CoursePlayer() {
                         {c.user?.full_name?.charAt(0) || '?'}
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-[#0a1628]">{c.user?.full_name}</span>
                           <Badge variant="outline" className="text-[9px]">{c.user?.role}</Badge>
                           <span className="text-[10px] text-gray-400">{new Date(c.created_at).toLocaleDateString()}</span>
+                          {/* Delete: own comment or admin/teacher */}
+                          {(c.user_id === user?.id || ['super_admin', 'prophet', 'teacher'].includes(user?.role)) && (
+                            <button onClick={async () => {
+                              if (!confirm('Delete this comment?')) return
+                              await supabase.from('lesson_comments').delete().eq('id', c.id)
+                              toast.success('Comment deleted')
+                              loadComments(currentLesson.id)
+                            }} className="text-[10px] text-red-400 hover:text-red-600 ml-auto">Delete</button>
+                          )}
                         </div>
                         <p className="text-sm text-gray-700 mt-1">{c.content}</p>
                       </div>
@@ -586,38 +607,38 @@ export default function CoursePlayer() {
           {/* Quiz Tab */}
           {activeTab === 'quiz' && (
             <Card>
-              <CardHeader><CardTitle className="text-base text-[#0a1628]">Lesson Quiz</CardTitle></CardHeader>
-              <CardContent>
+              <CardHeader className="px-4 sm:px-6"><CardTitle className="text-base text-[#0a1628]">Lesson Quiz</CardTitle></CardHeader>
+              <CardContent className="px-3 sm:px-6">
                 {quizzes.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-8">No quiz for this lesson.</p>
                 ) : quizzes.map((quiz) => (
-                  <div key={quiz.id} className="space-y-4">
+                  <div key={quiz.id} className="space-y-3 sm:space-y-4">
                     <p className="text-sm text-gray-600">{quiz.description} (Pass: {quiz.passing_score}%)</p>
                     {(quiz.questions || []).sort((a: any, b: any) => a.order_index - b.order_index).map((q: any, qi: number) => (
-                      <div key={q.id} className="p-4 border rounded-lg">
-                        <p className="text-sm font-medium mb-2">
-                          <span className="bg-[#0a1628] text-[#c9a227] text-xs rounded-full w-5 h-5 inline-flex items-center justify-center mr-2">{qi + 1}</span>
+                      <div key={q.id} className="p-3 sm:p-4 border rounded-lg">
+                        <p className="text-sm font-medium mb-3 leading-relaxed">
+                          <span className="bg-[#0a1628] text-[#c9a227] text-xs rounded-full w-5 h-5 inline-flex items-center justify-center mr-2 shrink-0">{qi + 1}</span>
                           {q.question_text}
                         </p>
                         {q.question_type === 'multiple_choice' && q.options?.map((opt: string, oi: number) => (
-                          <label key={oi} className={`flex items-center gap-2 p-2 rounded cursor-pointer text-sm ${quizAnswers[q.id] === opt ? 'bg-[#c9a227]/10 border border-[#c9a227]' : 'hover:bg-gray-50'}`}>
-                            <input type="radio" name={q.id} value={opt} checked={quizAnswers[q.id] === opt} onChange={() => setQuizAnswers({ ...quizAnswers, [q.id]: opt })} className="w-4 h-4" />
-                            {opt}
+                          <label key={oi} className={`flex items-start gap-3 p-2.5 sm:p-3 rounded-lg cursor-pointer text-sm mb-1.5 transition-all ${quizAnswers[q.id] === opt ? 'bg-[#c9a227]/10 border border-[#c9a227]' : 'hover:bg-gray-50 border border-transparent'}`}>
+                            <input type="radio" name={q.id} value={opt} checked={quizAnswers[q.id] === opt} onChange={() => setQuizAnswers({ ...quizAnswers, [q.id]: opt })} className="w-4 h-4 mt-0.5 shrink-0" />
+                            <span className="leading-relaxed">{opt}</span>
                           </label>
                         ))}
                         {(q.question_type === 'short_answer' || q.question_type === 'spiritual_application') && (
-                          <textarea value={quizAnswers[q.id] || ''} onChange={(e) => setQuizAnswers({ ...quizAnswers, [q.id]: e.target.value })} className="w-full mt-2 px-3 py-2 border rounded-md text-sm min-h-[60px]" placeholder="Type your answer..." />
+                          <textarea value={quizAnswers[q.id] || ''} onChange={(e) => setQuizAnswers({ ...quizAnswers, [q.id]: e.target.value })} className="w-full mt-2 px-3 py-2 border rounded-md text-sm min-h-[80px]" placeholder="Type your answer..." />
                         )}
                       </div>
                     ))}
 
                     {quizResult ? (
                       <div className={`p-4 rounded-lg text-center ${quizResult.passed ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                        <p className="text-lg font-bold">{quizResult.passed ? '🎉 Passed!' : '❌ Not Passed'}</p>
+                        <p className="text-lg font-bold">{quizResult.passed ? 'Passed!' : 'Not Passed'}</p>
                         <p className="text-sm">Score: {quizResult.score}%</p>
                       </div>
                     ) : (
-                      <Button onClick={() => submitQuiz(quiz)} disabled={quizSubmitting} className="w-full bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold">
+                      <Button onClick={() => submitQuiz(quiz)} disabled={quizSubmitting} className="w-full bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold h-11">
                         {quizSubmitting ? 'Submitting...' : 'Submit Quiz'}
                       </Button>
                     )}

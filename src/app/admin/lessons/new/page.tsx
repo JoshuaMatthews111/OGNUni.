@@ -129,20 +129,32 @@ export default function NewLessonPage() {
       <div className="flex items-center gap-4">
         <Link href="/admin/lessons"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Back</Button></Link>
         <div>
-          <h1 className="text-2xl font-bold text-[#0a1628]">Add New Lesson</h1>
-          <p className="text-sm text-gray-500">Create a lesson and attach it to a course</p>
+          <h1 className="text-2xl font-bold text-[#0a1628]">Content Creator</h1>
+          <p className="text-sm text-gray-500">Create lesson content and attach it to any course, module, or section</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
-          <CardHeader><CardTitle className="text-lg text-[#0a1628]">Course Assignment</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-lg text-[#0a1628]">Attach to Course</CardTitle></CardHeader>
           <CardContent>
-            <Label>Select Course *</Label>
-            <select value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)} className="w-full h-10 px-3 border rounded-md text-sm" required>
-              <option value="">Choose a course...</option>
-              {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-            </select>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label>Select Course *</Label>
+                <select value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)} className="w-full h-10 px-3 border rounded-md text-sm" required>
+                  <option value="">Choose a course...</option>
+                  {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </select>
+              </div>
+              {modules.length > 0 && (
+                <div>
+                  <Label>Select Module / Section</Label>
+                  <select className="w-full h-10 px-3 border rounded-md text-sm" defaultValue={modules[0]?.id}>
+                    {modules.map((m: any) => <option key={m.id} value={m.id}>{m.title}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -247,7 +259,7 @@ export default function NewLessonPage() {
         <div className="flex justify-end gap-2">
           <Link href="/admin/lessons"><Button variant="ghost">Cancel</Button></Link>
           <Button type="submit" className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold" disabled={saving}>
-            <Save className="w-4 h-4 mr-2" />{saving ? 'Saving...' : 'Create Lesson'}
+            <Save className="w-4 h-4 mr-2" />{saving ? 'Saving...' : 'Create & Attach Content'}
           </Button>
         </div>
       </form>

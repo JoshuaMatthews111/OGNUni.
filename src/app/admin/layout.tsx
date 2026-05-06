@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { canAccessAdmin, ROLE_LABELS } from '@/lib/constants'
+import { useRole } from '@/lib/role-context'
 import {
   LayoutDashboard,
   BookOpen,
@@ -33,6 +34,11 @@ import {
   BarChart3,
   Shield,
   Send,
+  Eye,
+  ShieldCheck,
+  GraduationCap as StudentIcon,
+  Wand2,
+  UserCircle,
 } from 'lucide-react'
 
 export default function AdminLayout({
@@ -40,8 +46,8 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, viewMode, setViewMode, availableViews, viewLabel, canAdmin } = useRole()
+  const [localLoading, setLocalLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const pathname = usePathname()
@@ -49,39 +55,38 @@ export default function AdminLayout({
   const supabase = createClient()
 
   useEffect(() => {
-    checkUser()
-  }, [])
+    if (user) {
+      if (!canAdmin) {
+        router.push('/dashboard')
+      } else {
+        setLocalLoading(false)
+      }
+    }
+  }, [user, canAdmin])
+
+  useEffect(() => {
+    // If role context loaded with no user, redirect
+    if (user === null && !localLoading) {
+      router.push('/')
+    }
+  }, [user])
 
   useEffect(() => {
     setSidebarOpen(false)
   }, [pathname])
 
-  const checkUser = async () => {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-
-    if (!authUser) {
-      router.push('/')
-      return
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!profile || !canAccessAdmin(profile.role)) {
-      router.push('/')
-      return
-    }
-
-    setUser(profile)
-    setLoading(false)
-  }
-
   const handleSignOut = async () => {
     await supabase.auth.signOut()
+    setViewMode('student')
     router.push('/')
+  }
+
+  const handleSwitchView = (mode: 'admin' | 'teacher' | 'student') => {
+    setViewMode(mode)
+    setUserMenuOpen(false)
+    if (mode === 'student') {
+      router.push('/dashboard')
+    }
   }
 
   const isSuperAdmin = user?.role === 'super_admin'
@@ -91,8 +96,8 @@ export default function AdminLayout({
       items: [
         { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/admin/users', label: 'Users', icon: Users },
-        { href: '/admin/courses', label: 'Courses', icon: BookOpen },
-        { href: '/admin/lessons', label: 'Lessons', icon: FileText },
+        { href: '/admin/courses', label: 'Course Builder', icon: BookOpen },
+        { href: '/admin/lessons', label: 'Content Creator', icon: Wand2 },
         { href: '/admin/enrollments', label: 'Enrollments', icon: FileCheck },
         { href: '/admin/quizzes', label: 'Quizzes & Tests', icon: ClipboardList },
         { href: '/admin/community', label: 'Discussions', icon: MessagesSquare },
@@ -113,12 +118,12 @@ export default function AdminLayout({
 
   const quickActions = [
     { label: 'Create New Course', href: '/admin/courses/new', icon: Plus },
-    { label: 'Add New Lesson', href: '/admin/lessons/new', icon: FileText },
+    { label: 'Create Content', href: '/admin/lessons/new', icon: Wand2 },
     { label: 'Create Announcement', href: '/admin/community/new', icon: Megaphone },
     { label: 'Generate AI Quiz', href: '/admin/quizzes/generate', icon: Sparkles },
   ]
 
-  if (loading) {
+  if (localLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a1628]">
         <div className="text-center">
@@ -129,6 +134,14 @@ export default function AdminLayout({
       </div>
     )
   }
+
+  const viewModeLabels: Record<string, { label: string; icon: any; color: string }> = {
+    admin: { label: 'Administrator Mode', icon: ShieldCheck, color: 'bg-[#c9a227] text-[#0a1628]' },
+    teacher: { label: 'Teacher Mode', icon: GraduationCap, color: 'bg-blue-500 text-white' },
+    student: { label: 'Student View', icon: Eye, color: 'bg-green-500 text-white' },
+  }
+
+  const currentMode = viewModeLabels[viewMode] || viewModeLabels.admin
 
   return (
     <div className="min-h-screen bg-[#f0f2f5]">
@@ -147,10 +160,10 @@ export default function AdminLayout({
             <p className="text-[10px] text-gray-400 tracking-widest">OVERCOMERS GLOBAL NETWORK</p>
           </div>
 
-          {/* Admin Portal badge */}
+          {/* Mode badge */}
           <div className="mx-4 mt-4 mb-2">
-            <div className="bg-[#c9a227] text-[#0a1628] text-xs font-bold text-center py-1.5 rounded-md tracking-wide">
-              ADMIN PORTAL
+            <div className={`${currentMode.color} text-xs font-bold text-center py-1.5 rounded-md tracking-wide`}>
+              {currentMode.label.toUpperCase()}
             </div>
           </div>
 
@@ -202,12 +215,16 @@ export default function AdminLayout({
           {/* User profile at bottom */}
           <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[#1a3a5c] bg-[#0a1628]">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#1a3a5c] flex items-center justify-center text-[#c9a227] font-bold text-sm">
-                {user?.full_name?.charAt(0) || 'A'}
-              </div>
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-[#1a3a5c] flex items-center justify-center text-[#c9a227] font-bold text-sm">
+                  {user?.full_name?.charAt(0) || 'A'}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Admin'}</p>
-                <p className="text-[10px] text-[#c9a227]">{ROLE_LABELS[user?.role] || user?.role}</p>
+                <p className="text-[10px] text-[#c9a227]">{currentMode.label}</p>
                 <div className="flex items-center gap-1 mt-0.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   <span className="text-[10px] text-green-400">Online</span>
@@ -251,19 +268,28 @@ export default function AdminLayout({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button className="relative p-2 rounded-lg hover:bg-gray-100">
                   <Bell className="w-5 h-5 text-gray-600" />
                   <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
                 </button>
 
+                {/* Profile + Role Switcher Dropdown */}
                 <div className="relative">
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100"
                   >
-                    <div className="w-8 h-8 rounded-full bg-[#0a1628] flex items-center justify-center text-[#c9a227] font-bold text-xs">
-                      {user?.full_name?.charAt(0) || 'A'}
+                    {user?.avatar_url ? (
+                      <img src={user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[#0a1628] flex items-center justify-center text-[#c9a227] font-bold text-xs">
+                        {user?.full_name?.charAt(0) || 'A'}
+                      </div>
+                    )}
+                    <div className="hidden sm:block text-left">
+                      <p className="text-xs font-semibold text-[#0a1628] leading-tight">{user?.full_name}</p>
+                      <p className="text-[10px] text-[#c9a227]">{currentMode.label}</p>
                     </div>
                     <ChevronDown className="w-4 h-4 text-gray-400" />
                   </button>
@@ -271,14 +297,50 @@ export default function AdminLayout({
                   {userMenuOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                      <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border z-50 py-1">
-                        <Link href="/dashboard" className="block px-4 py-2 text-sm hover:bg-gray-50">Student View</Link>
-                        <Link href="/admin/settings" className="block px-4 py-2 text-sm hover:bg-gray-50">Settings</Link>
-                        <hr className="my-1" />
-                        <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 flex items-center gap-2">
-                          <LogOut className="w-4 h-4" />
-                          Sign Out
-                        </button>
+                      <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-xl shadow-xl border z-50 py-2 overflow-hidden">
+                        {/* User info header */}
+                        <div className="px-4 py-3 border-b bg-gray-50">
+                          <p className="text-sm font-bold text-[#0a1628]">{user?.full_name}</p>
+                          <p className="text-xs text-gray-500">{user?.email}</p>
+                          <p className="text-[10px] text-[#c9a227] font-semibold mt-1">{ROLE_LABELS[user?.role] || user?.role}</p>
+                        </div>
+
+                        {/* Role Switch Section */}
+                        <div className="px-3 py-2 border-b">
+                          <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-1.5 px-1">SWITCH VIEW</p>
+                          {availableViews.map((mode) => {
+                            const modeInfo = viewModeLabels[mode]
+                            const ModeIcon = modeInfo.icon
+                            const isActive = viewMode === mode
+                            return (
+                              <button
+                                key={mode}
+                                onClick={() => handleSwitchView(mode)}
+                                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all mb-0.5 ${
+                                  isActive
+                                    ? 'bg-[#0a1628] text-[#c9a227] font-semibold'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                              >
+                                <ModeIcon className="w-4 h-4" />
+                                <span>{modeInfo.label}</span>
+                                {isActive && <span className="ml-auto text-[9px] bg-[#c9a227] text-[#0a1628] px-1.5 py-0.5 rounded-full font-bold">ACTIVE</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="py-1">
+                          <Link href="/admin/settings" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            <Settings className="w-4 h-4" />
+                            Account Settings
+                          </Link>
+                          <button onClick={handleSignOut} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                            <LogOut className="w-4 h-4" />
+                            Sign Out
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
@@ -300,7 +362,8 @@ export default function AdminLayout({
               <span>•</span>
               <span className="text-[#c9a227]">Educate • Equip • Evolve</span>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">&copy; {new Date().getFullYear()} Overcomers Global Network University. All Rights Reserved.</p>
+            <p className="text-[10px] text-gray-400 mt-1">7519 Mentor Ave, Suite A106, Mentor, Ohio 44060</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">&copy; {new Date().getFullYear()} Overcomers Global Network University. All Rights Reserved.</p>
           </footer>
         </div>
       </div>

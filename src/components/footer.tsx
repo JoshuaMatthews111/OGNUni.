@@ -44,7 +44,7 @@ export function Footer() {
                 <Linkedin className="w-5 h-5" />
               </a>
             </div>
-            <p className="text-sm text-gray-400 mt-4">Painesville, Ohio, USA</p>
+            <p className="text-sm text-gray-400 mt-4">7519 Mentor Ave, Suite A106, Mentor, Ohio 44060</p>
           </div>
         </div>
 

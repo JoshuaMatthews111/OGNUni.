@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Search, UserCog, Mail, Calendar, UserPlus, Send, Shield, Pause, Ban, CheckCircle, Copy, MoreVertical, X } from 'lucide-react'
+import { Search, UserCog, Mail, Calendar, UserPlus, Send, Shield, Pause, Ban, CheckCircle, Copy, MoreVertical, X, Key, BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import { ROLES, ROLE_LABELS } from '@/lib/constants'
 
@@ -41,6 +41,11 @@ export default function AdminUsersPage() {
   const [addRole, setAddRole] = useState('student')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
+  const [showPasswordModal, setShowPasswordModal] = useState<string | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [showEnrollModal, setShowEnrollModal] = useState<string | null>(null)
+  const [courses, setCourses] = useState<any[]>([])
+  const [selectedCourseId, setSelectedCourseId] = useState('')
 
   useEffect(() => {
     loadUsers()
@@ -162,6 +167,63 @@ export default function AdminUsersPage() {
       toast.error('Something went wrong')
     }
     setActionLoading(null)
+  }
+
+  const handleChangePassword = async (userId: string) => {
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
+    setActionLoading('password')
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'change_password', password: newPassword }),
+      })
+      const result = await res.json()
+      if (res.ok) {
+        toast.success('Password changed successfully')
+        setShowPasswordModal(null)
+        setNewPassword('')
+      } else {
+        toast.error(result.error || 'Failed to change password')
+      }
+    } catch {
+      toast.error('Something went wrong')
+    }
+    setActionLoading(null)
+  }
+
+  const handleEnrollUser = async (userId: string) => {
+    if (!selectedCourseId) {
+      toast.error('Select a course')
+      return
+    }
+    setActionLoading('enroll')
+    try {
+      const { error } = await supabase.from('enrollments').insert({
+        user_id: userId,
+        course_id: selectedCourseId,
+        enrolled_at: new Date().toISOString(),
+      })
+      if (error) {
+        if (error.code === '23505') toast.error('User is already enrolled in this course')
+        else toast.error(error.message)
+      } else {
+        toast.success('User enrolled successfully!')
+        setShowEnrollModal(null)
+        setSelectedCourseId('')
+      }
+    } catch {
+      toast.error('Something went wrong')
+    }
+    setActionLoading(null)
+  }
+
+  const loadCourses = async () => {
+    const { data } = await supabase.from('courses').select('id, title').order('title')
+    setCourses(data || [])
   }
 
   const getRoleBadgeColor = (role: string) => {
@@ -304,6 +366,12 @@ export default function AdminUsersPage() {
                               <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Activate User
                             </button>
                           )}
+                          <button onClick={() => { setShowPasswordModal(user.id); setActiveMenu(null) }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
+                            <Key className="w-3.5 h-3.5 text-amber-600" /> Change Password
+                          </button>
+                          <button onClick={() => { setShowEnrollModal(user.id); loadCourses(); setActiveMenu(null) }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2">
+                            <BookOpen className="w-3.5 h-3.5 text-blue-600" /> Enroll in Course
+                          </button>
                           <div className="border-t my-1"></div>
                           {/* Mobile role change */}
                           <div className="px-4 py-2 sm:hidden">
@@ -415,6 +483,48 @@ export default function AdminUsersPage() {
             </div>
             <Button onClick={handleAddUser} disabled={actionLoading === 'add'} className="w-full bg-[#0a1628] hover:bg-[#1a2c48] text-white font-semibold">
               {actionLoading === 'add' ? 'Creating...' : 'Create User'}
+            </Button>
+          </div>
+        </div>
+      )}
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowPasswordModal(null); setNewPassword('') }}>
+          <div className="bg-white rounded-xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-[#0a1628]">Change Password</h2>
+              <button onClick={() => { setShowPasswordModal(null); setNewPassword('') }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm text-gray-500">Set a new password for this user.</p>
+            <div>
+              <Label>New Password *</Label>
+              <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters" />
+            </div>
+            <Button onClick={() => handleChangePassword(showPasswordModal)} disabled={actionLoading === 'password'} className="w-full bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold">
+              {actionLoading === 'password' ? 'Changing...' : 'Change Password'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Enroll User Modal */}
+      {showEnrollModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowEnrollModal(null); setSelectedCourseId('') }}>
+          <div className="bg-white rounded-xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-[#0a1628]">Enroll in Course</h2>
+              <button onClick={() => { setShowEnrollModal(null); setSelectedCourseId('') }} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-sm text-gray-500">Select a course to enroll this user in.</p>
+            <div>
+              <Label>Course *</Label>
+              <select value={selectedCourseId} onChange={e => setSelectedCourseId(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm">
+                <option value="">Select a course...</option>
+                {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+            </div>
+            <Button onClick={() => handleEnrollUser(showEnrollModal)} disabled={actionLoading === 'enroll'} className="w-full bg-[#0a1628] hover:bg-[#1a2c48] text-white font-semibold">
+              {actionLoading === 'enroll' ? 'Enrolling...' : 'Enroll User'}
             </Button>
           </div>
         </div>

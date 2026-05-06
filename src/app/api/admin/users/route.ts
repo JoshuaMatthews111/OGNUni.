@@ -9,7 +9,7 @@ const supabase = createClient(
 // PATCH: Update user role or status
 export async function PATCH(request: Request) {
   try {
-    const { userId, action, role } = await request.json()
+    const { userId, action, role, password } = await request.json()
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
@@ -74,6 +74,26 @@ export async function PATCH(request: Request) {
       })
 
       return NextResponse.json({ success: true, message: 'User activated' })
+    }
+
+    if (action === 'change_password') {
+      if (!password || password.length < 6) {
+        return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+      }
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+        },
+        body: JSON.stringify({ password }),
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        return NextResponse.json({ error: 'Failed to change password' }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, message: 'Password changed successfully' })
     }
 
     if (action === 'delete') {

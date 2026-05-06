@@ -46,7 +46,16 @@ export const COURSE_CATEGORIES = [
   'Prophetic Training',
   'Ministry Leadership',
   'Spiritual Formation',
-] as const
+  'Ecclesiology',
+  'Eschatology',
+  'Biblical Studies',
+  'Prayer & Intercession',
+  'Worship & Praise',
+  'Evangelism & Missions',
+  'Marriage & Family',
+  'Youth Ministry',
+  'Deliverance Ministry',
+]
 
 export const VISIBILITY_OPTIONS = [
   { value: 'public', label: 'Public' },

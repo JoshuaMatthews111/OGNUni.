@@ -13,7 +13,10 @@ import {
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { ROLE_LABELS, COURSE_CATEGORIES } from '@/lib/constants'
+import { toast } from 'sonner'
+import { ROLE_LABELS, COURSE_CATEGORIES, canAccessAdmin } from '@/lib/constants'
+import { useRole } from '@/lib/role-context'
+import { ShieldCheck, LogOut, Settings, ChevronDown } from 'lucide-react'
 
 export default function StudentDashboard() {
   const [enrollments, setEnrollments] = useState<any[]>([])
@@ -22,7 +25,9 @@ export default function StudentDashboard() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const router = useRouter()
+  const { canAdmin } = useRole()
   const supabase = createClient()
 
   useEffect(() => {
@@ -163,24 +168,118 @@ export default function StudentDashboard() {
                   <input placeholder="Search for courses, lessons, documents..." className="w-80 pl-10 pr-4 py-2 bg-gray-50 border rounded-lg text-sm focus:ring-2 focus:ring-[#c9a227]/30" />
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button className="relative p-2 hover:bg-gray-100 rounded-lg">
                   <Bell className="w-5 h-5 text-gray-600" />
                 </button>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#0a1628] text-[#c9a227] flex items-center justify-center text-xs font-bold">
-                    {user?.full_name?.charAt(0) || 'S'}
-                  </div>
-                  <div className="hidden md:block">
-                    <p className="text-sm font-semibold text-[#0a1628]">{user?.full_name}</p>
-                    <p className="text-[10px] text-gray-500">{ROLE_LABELS[user?.role] || 'Student'}</p>
-                  </div>
+                {/* Profile + Role Switcher */}
+                <div className="relative">
+                  <button
+                    onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                    className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100"
+                  >
+                    <div className="relative group">
+                      {user?.avatar_url ? (
+                        <img src={user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-[#0a1628] text-[#c9a227] flex items-center justify-center text-xs font-bold">
+                          {user?.full_name?.charAt(0) || 'S'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="hidden sm:block text-left">
+                      <p className="text-xs font-semibold text-[#0a1628] leading-tight">{user?.full_name}</p>
+                      <p className="text-[10px] text-gray-500">{ROLE_LABELS[user?.role] || 'Student'}</p>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  </button>
+
+                  {profileMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-xl shadow-xl border z-50 py-2 overflow-hidden">
+                        {/* User info */}
+                        <div className="px-4 py-3 border-b bg-gray-50">
+                          <p className="text-sm font-bold text-[#0a1628]">{user?.full_name}</p>
+                          <p className="text-xs text-gray-500">{user?.email}</p>
+                          <p className="text-[10px] text-[#c9a227] font-semibold mt-1">{ROLE_LABELS[user?.role] || 'Student'}</p>
+                        </div>
+
+                        {/* Role Switch */}
+                        {canAccessAdmin(user?.role) && (
+                          <div className="px-3 py-2 border-b">
+                            <p className="text-[10px] text-gray-400 font-semibold tracking-wider mb-1.5 px-1">SWITCH VIEW</p>
+                            <button
+                              onClick={() => { setProfileMenuOpen(false); router.push('/admin') }}
+                              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                              <span>Switch to Admin</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Upload Photo */}
+                        <div className="py-1 border-b">
+                          <label className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                            <Eye className="w-4 h-4" />
+                            Change Profile Photo
+                            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              const ext = file.name.split('.').pop()
+                              const fileName = `avatar-${user.id}-${Date.now()}.${ext}`
+                              const { error } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
+                              if (error) {
+                                const { error: e2 } = await supabase.storage.from('course-thumbnails').upload(fileName, file, { upsert: true })
+                                if (e2) { toast.error('Upload failed'); return }
+                                const { data: d2 } = supabase.storage.from('course-thumbnails').getPublicUrl(fileName)
+                                await supabase.from('profiles').update({ avatar_url: d2.publicUrl }).eq('id', user.id)
+                                setUser({ ...user, avatar_url: d2.publicUrl })
+                                toast.success('Photo updated!')
+                                setProfileMenuOpen(false)
+                                return
+                              }
+                              const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
+                              await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', user.id)
+                              setUser({ ...user, avatar_url: data.publicUrl })
+                              toast.success('Photo updated!')
+                              setProfileMenuOpen(false)
+                            }} />
+                          </label>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="py-1">
+                          <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                            <LogOut className="w-4 h-4" />
+                            Sign Out
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           </header>
 
           <main className="p-4 lg:p-8 space-y-6">
+            {/* Return to Admin banner */}
+            {canAdmin && (
+              <div className="bg-[#0a1628] text-white px-4 py-2.5 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-[#c9a227]" />
+                  <span className="text-sm">You are currently viewing as <span className="font-semibold text-[#c9a227]">Student</span></span>
+                </div>
+                <Link href="/admin">
+                  <button className="px-4 py-1.5 text-xs font-bold bg-[#c9a227] text-[#0a1628] rounded-full hover:bg-[#b8941f] transition-colors">
+                    Return to Admin
+                  </button>
+                </Link>
+              </div>
+            )}
+
             {/* Welcome + Quote */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div>
@@ -253,6 +352,26 @@ export default function StudentDashboard() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Enroll in a New Course */}
+            <Card className="border-2 border-dashed border-[#c9a227]/40 hover:border-[#c9a227] transition-colors">
+              <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#c9a227]/10 flex items-center justify-center flex-shrink-0">
+                    <GraduationCap className="w-5 h-5 text-[#c9a227]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#0a1628]">Enroll in a New Course</p>
+                    <p className="text-xs text-gray-500">Browse available courses and continue your learning journey</p>
+                  </div>
+                </div>
+                <Link href="/courses">
+                  <Button className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold whitespace-nowrap" size="sm">
+                    <BookOpen className="w-4 h-4 mr-1" /> Browse Courses
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
 
             {/* My Courses */}
             <div>
@@ -379,7 +498,8 @@ export default function StudentDashboard() {
               <span>•</span>
               <span className="text-[#c9a227]">Educate • Equip • Evolve</span>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">&copy; {new Date().getFullYear()} Overcomers Global Network University. All Rights Reserved.</p>
+            <p className="text-[10px] text-gray-400 mt-1">7519 Mentor Ave, Suite A106, Mentor, Ohio 44060</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">&copy; {new Date().getFullYear()} Overcomers Global Network University. All Rights Reserved.</p>
           </footer>
         </div>
       </div>
