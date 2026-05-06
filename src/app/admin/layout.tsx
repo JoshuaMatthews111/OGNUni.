@@ -60,6 +60,10 @@ export default function AdminLayout({
         router.push('/dashboard')
       } else {
         setLocalLoading(false)
+        // Force admin mode when on admin pages
+        if (viewMode === 'student') {
+          setViewMode('admin')
+        }
       }
     }
   }, [user, canAdmin])

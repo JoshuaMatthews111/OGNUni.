@@ -503,20 +503,24 @@ export default function EditCoursePage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-4">
-          <Link href="/admin/courses"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Back</Button></Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-[#0a1628]">{course?.title}</h1>
-              {course?.is_published ? <Badge className="bg-green-600 text-white">Published</Badge> : <Badge variant="outline">Draft</Badge>}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/admin/courses"><Button variant="ghost" size="sm" className="flex-shrink-0 px-2"><ArrowLeft className="w-4 h-4" /></Button></Link>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-2xl font-bold text-[#0a1628] truncate">{course?.title}</h1>
+              {course?.is_published ? <Badge className="bg-green-600 text-white text-[10px]">Live</Badge> : <Badge variant="outline" className="text-[10px]">Draft</Badge>}
             </div>
-            <p className="text-sm text-gray-500">{modules.length} sections • {lessons.length} lessons</p>
+            <p className="text-xs sm:text-sm text-gray-500">{modules.length} sections • {lessons.length} lessons</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={updateCourse} disabled={saving}><Save className="w-4 h-4 mr-2" />{saving ? 'Saving...' : 'Save'}</Button>
-          {!course?.is_published && <Button className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold" onClick={publishCourse}><Eye className="w-4 h-4 mr-2" /> Publish</Button>}
+        <div className="flex gap-2 flex-shrink-0">
+          <Button variant="outline" size="sm" onClick={updateCourse} disabled={saving}><Save className="w-4 h-4 mr-1" />{saving ? 'Saving...' : 'Save'}</Button>
+          {course?.is_published ? (
+            <Link href={`/courses/${course?.slug}`} target="_blank"><Button variant="outline" size="sm"><Eye className="w-4 h-4 mr-1" /> Preview</Button></Link>
+          ) : (
+            <Button size="sm" className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold" onClick={publishCourse}>Publish</Button>
+          )}
         </div>
       </div>
 
@@ -571,13 +575,11 @@ export default function EditCoursePage() {
       )}
 
       {/* Tools Bar */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-xs text-gray-500 font-medium mr-1">Add:</span>
-        <Button onClick={() => setShowAddModule(!showAddModule)} variant="outline" size="sm"><Plus className="w-4 h-4 mr-1" /> Section</Button>
-        <Button onClick={() => setShowAddLesson(!showAddLesson)} className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold" size="sm"><Plus className="w-4 h-4 mr-1" /> Lesson</Button>
-        <span className="text-xs text-gray-400 mx-1">|</span>
-        <Button onClick={() => setShowBulkUpload(!showBulkUpload)} variant="outline" size="sm"><Upload className="w-4 h-4 mr-1" /> Bulk Upload</Button>
-        <Button onClick={() => setShowContentBuilder(!showContentBuilder)} variant="outline" size="sm" className="border-purple-300 text-purple-700 hover:bg-purple-50"><Wand2 className="w-4 h-4 mr-1" /> AI Builder</Button>
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 items-center">
+        <Button onClick={() => setShowAddModule(!showAddModule)} variant="outline" size="sm" className="text-xs"><Plus className="w-3.5 h-3.5 mr-1" /> Add Section</Button>
+        <Button onClick={() => setShowAddLesson(!showAddLesson)} className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold text-xs" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Add Lesson</Button>
+        <Button onClick={() => setShowBulkUpload(!showBulkUpload)} variant="outline" size="sm" className="text-xs"><Upload className="w-3.5 h-3.5 mr-1" /> Bulk Upload</Button>
+        <Button onClick={() => setShowContentBuilder(!showContentBuilder)} variant="outline" size="sm" className="border-purple-300 text-purple-700 hover:bg-purple-50 text-xs"><Wand2 className="w-3.5 h-3.5 mr-1" /> AI Builder</Button>
       </div>
 
       {/* Add Module */}
@@ -603,8 +605,8 @@ export default function EditCoursePage() {
                 <h3 className="font-semibold text-[#0a1628]">New Lesson</h3>
                 <p className="text-xs text-gray-500">Fill in the title and add content (video, audio, PDF, or text notes). Only the title is required.</p>
               </div>
-              <div className="grid md:grid-cols-3 gap-4">
-                <div><Label>Title *</Label><Input value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} required /></div>
+              <div><Label>Title *</Label><Input value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} required placeholder="e.g. Introduction to Faith" /></div>
+              <div className="grid grid-cols-2 gap-3">
                 <div><Label>Duration (min)</Label><Input type="number" value={lessonForm.estimated_duration_minutes} onChange={(e) => setLessonForm({ ...lessonForm, estimated_duration_minutes: parseInt(e.target.value) || 0 })} /></div>
                 <div><Label>Add to Section</Label>
                   <select value={lessonForm.targetModule} onChange={(e) => setLessonForm({ ...lessonForm, targetModule: e.target.value })} className="w-full h-10 px-3 border rounded-md text-sm">
@@ -612,11 +614,11 @@ export default function EditCoursePage() {
                     {modules.map((m: any) => <option key={m.id} value={m.id}>{m.title}</option>)}
                   </select></div>
               </div>
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label><Youtube className="w-3 h-3 inline mr-1" />YouTube URL</Label><Input value={lessonForm.youtube_url} onChange={(e) => setLessonForm({ ...lessonForm, youtube_url: e.target.value })} placeholder="https://youtube.com/watch?v=..." /></div>
                 <div><Label><Video className="w-3 h-3 inline mr-1" />Vimeo URL</Label><Input value={lessonForm.vimeo_url} onChange={(e) => setLessonForm({ ...lessonForm, vimeo_url: e.target.value })} placeholder="https://vimeo.com/..." /></div>
               </div>
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label><Music className="w-3 h-3 inline mr-1" />Audio URL</Label><Input value={lessonForm.audio_url} onChange={(e) => setLessonForm({ ...lessonForm, audio_url: e.target.value })} placeholder="MP3 or audio file URL" /></div>
                 <div><Label><FileText className="w-3 h-3 inline mr-1" />PDF/Doc URL</Label><Input value={lessonForm.pdf_url} onChange={(e) => setLessonForm({ ...lessonForm, pdf_url: e.target.value })} placeholder="PDF or document URL" /></div>
               </div>
@@ -768,12 +770,12 @@ export default function EditCoursePage() {
             const isExpanded = expandedModules.has(mod.id)
             return (
               <Card key={mod.id} className="border-l-4 border-l-[#0a1628]">
-                <div className="flex items-center gap-3 p-4 bg-gray-50 border-b cursor-pointer" onClick={() => toggleModule(mod.id)}>
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={(e) => { e.stopPropagation(); moveModule(mod.id, 'up') }} className="text-gray-400 hover:text-[#0a1628] p-0.5"><ArrowUp className="w-3 h-3" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); moveModule(mod.id, 'down') }} className="text-gray-400 hover:text-[#0a1628] p-0.5"><ArrowDown className="w-3 h-3" /></button>
+                <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-gray-50 border-b cursor-pointer" onClick={() => toggleModule(mod.id)}>
+                  <div className="flex flex-col gap-0.5 flex-shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); moveModule(mod.id, 'up') }} className="text-gray-400 hover:text-[#0a1628] p-0.5" title="Move Up"><ArrowUp className="w-3 h-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); moveModule(mod.id, 'down') }} className="text-gray-400 hover:text-[#0a1628] p-0.5" title="Move Down"><ArrowDown className="w-3 h-3" /></button>
                   </div>
-                  <div className="w-8 h-8 rounded bg-[#0a1628] text-[#c9a227] flex items-center justify-center text-sm font-bold">{modIdx + 1}</div>
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded bg-[#0a1628] text-[#c9a227] flex items-center justify-center text-xs sm:text-sm font-bold flex-shrink-0">{modIdx + 1}</div>
                   <div className="flex-1 min-w-0">
                     {editingModule === mod.id ? (
                       <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
@@ -781,13 +783,13 @@ export default function EditCoursePage() {
                         <Button size="sm" onClick={() => updateModuleTitle(mod.id)} className="h-8">Save</Button>
                       </div>
                     ) : (
-                      <p className="font-semibold text-[#0a1628]">{mod.title}</p>
+                      <p className="font-semibold text-[#0a1628] text-sm sm:text-base truncate">{mod.title}</p>
                     )}
-                    <p className="text-xs text-gray-500">{modLessons.length} lesson{modLessons.length !== 1 ? 's' : ''}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-500">{modLessons.length} lesson{modLessons.length !== 1 ? 's' : ''}</p>
                   </div>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="sm" onClick={() => { setEditingModule(mod.id); setEditModuleTitle(mod.title) }} title="Rename"><PenTool className="w-3 h-3" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => deleteModule(mod.id)} title="Delete section"><Trash2 className="w-3 h-3 text-red-500" /></Button>
+                  <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => { setEditingModule(mod.id); setEditModuleTitle(mod.title) }} className="p-1.5 rounded hover:bg-gray-200 text-gray-500" title="Edit"><PenTool className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => deleteModule(mod.id)} className="p-1.5 rounded hover:bg-red-50 text-red-500" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                   </div>
                 </div>
@@ -802,13 +804,13 @@ export default function EditCoursePage() {
                           className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 border-b last:border-b-0 hover:bg-gray-50/50 transition-all ${dragOverLessonId === lesson.id ? 'bg-[#c9a227]/10 border-t-2 border-t-[#c9a227]' : ''} ${dragLessonId === lesson.id ? 'opacity-50' : ''}`}>
                           <div className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-[#0a1628] flex-shrink-0" title="Drag to reorder"><GripVertical className="w-4 h-4" /></div>
                           <div className="w-7 h-7 rounded-full bg-[#0a1628]/10 text-[#0a1628] flex items-center justify-center text-xs font-bold flex-shrink-0">{lesIdx + 1}</div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-medium text-[#0a1628] text-sm truncate">{lesson.title}</p>
-                              <Badge className={`text-[9px] ${badge.color} flex items-center gap-0.5`}><BadgeIcon className="w-2.5 h-2.5" />{badge.label}</Badge>
-                              {lesson.quiz_required && <Badge className="text-[9px] bg-purple-100 text-purple-700">Quiz</Badge>}
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-medium text-[#0a1628] text-xs sm:text-sm truncate">{lesson.title}</p>
+                              <Badge className={`text-[8px] sm:text-[9px] ${badge.color} flex items-center gap-0.5 flex-shrink-0 whitespace-nowrap`}><BadgeIcon className="w-2.5 h-2.5" />{badge.label}</Badge>
+                              {lesson.quiz_required && <Badge className="text-[8px] sm:text-[9px] bg-purple-100 text-purple-700 flex-shrink-0">Quiz</Badge>}
                             </div>
-                            <p className="text-xs text-gray-500 truncate">{lesson.description || lesson.scripture_references || 'No description'}</p>
+                            <p className="text-[10px] sm:text-xs text-gray-500 truncate">{lesson.description || lesson.scripture_references || 'No description'}</p>
                           </div>
                           <div className="text-xs text-gray-400 whitespace-nowrap hidden sm:block">{lesson.estimated_duration_minutes || '\u2014'} min</div>
                           <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -830,10 +832,10 @@ export default function EditCoursePage() {
       {/* ═══ PREVIEW MODAL ═══ */}
       {previewLesson && (<>
         <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setPreviewLesson(null)} />
-        <div className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-y-10 lg:inset-x-[15%] bg-white rounded-2xl z-50 flex flex-col overflow-hidden shadow-2xl">
-          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b bg-gray-50 flex-shrink-0">
-            <div className="flex-1 min-w-0 mr-4">
-              <h3 className="text-lg font-bold text-[#0a1628] truncate">{previewLesson.title}</h3>
+        <div className="fixed inset-0 sm:inset-4 md:inset-8 lg:inset-y-8 lg:inset-x-[12%] bg-white sm:rounded-2xl z-50 flex flex-col overflow-hidden shadow-2xl">
+          <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b bg-gray-50 flex-shrink-0">
+            <div className="flex-1 min-w-0 mr-2">
+              <h3 className="text-base sm:text-lg font-bold text-[#0a1628] truncate">{previewLesson.title}</h3>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {(() => { const b = getContentTypeBadge(previewLesson); const I = b.icon; return <Badge className={`text-[10px] ${b.color}`}><I className="w-3 h-3 mr-0.5" />{b.label}</Badge> })()}
                 {previewLesson.estimated_duration_minutes && <span className="text-xs text-gray-500">{previewLesson.estimated_duration_minutes} min</span>}
@@ -861,7 +863,7 @@ export default function EditCoursePage() {
       {/* ═══ EDIT LESSON MODAL ═══ */}
       {editLesson && (<>
         <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setEditLesson(null)} />
-        <div className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-y-10 lg:inset-x-[20%] bg-white rounded-2xl z-50 flex flex-col overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 sm:inset-4 md:inset-8 lg:inset-y-8 lg:inset-x-[15%] bg-white sm:rounded-2xl z-50 flex flex-col overflow-hidden shadow-2xl">
           <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b bg-gray-50 flex-shrink-0">
             <h3 className="text-lg font-bold text-[#0a1628]">Edit Lesson</h3>
             <div className="flex items-center gap-2">
