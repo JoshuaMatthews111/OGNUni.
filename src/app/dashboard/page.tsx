@@ -17,6 +17,8 @@ import { toast } from 'sonner'
 import { ROLE_LABELS, COURSE_CATEGORIES, canAccessAdmin } from '@/lib/constants'
 import { useRole } from '@/lib/role-context'
 import { ShieldCheck, LogOut, Settings, ChevronDown } from 'lucide-react'
+import { OnboardingTour } from '@/components/onboarding-tour'
+import { VerifyEmailBanner } from '@/components/verify-email-banner'
 
 export default function StudentDashboard() {
   const [enrollments, setEnrollments] = useState<any[]>([])
@@ -26,6 +28,7 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const router = useRouter()
   const { canAdmin } = useRole()
   const supabase = createClient()
@@ -40,6 +43,8 @@ export default function StudentDashboard() {
 
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single()
     setUser(profile)
+    const onboardingDone = profile?.onboarding_completed || localStorage.getItem(`ogn-onboarding-${authUser.id}`) === 'done'
+    if (profile && !onboardingDone) setShowOnboarding(true)
 
     const { data: enrollmentData } = await supabase
       .from('enrollments')
@@ -88,6 +93,11 @@ export default function StudentDashboard() {
   }
 
   const inProgress = enrollments.filter((e) => !e.completed_at && e.progress > 0)
+
+  // Onboarding tour for first-time users
+  const onboardingTour = showOnboarding && user ? (
+    <OnboardingTour userId={user.id} role="student" onComplete={() => { setShowOnboarding(false); loadAll() }} />
+  ) : null
   const completed = enrollments.filter((e) => e.completed_at)
   const continueLesson = inProgress[0]
 
@@ -107,6 +117,7 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-[#f0f2f5]">
+      {onboardingTour}
       <div className="flex">
         {/* Student Sidebar */}
         <aside className={`fixed lg:sticky top-0 left-0 z-50 w-[240px] h-screen overflow-y-auto bg-[#0a1628] text-white transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -229,22 +240,23 @@ export default function StudentDashboard() {
                               if (!file) return
                               const ext = file.name.split('.').pop()
                               const fileName = `avatar-${user.id}-${Date.now()}.${ext}`
-                              const { error } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
-                              if (error) {
-                                const { error: e2 } = await supabase.storage.from('course-thumbnails').upload(fileName, file, { upsert: true })
-                                if (e2) { toast.error('Upload failed'); return }
-                                const { data: d2 } = supabase.storage.from('course-thumbnails').getPublicUrl(fileName)
-                                await supabase.from('profiles').update({ avatar_url: d2.publicUrl }).eq('id', user.id)
-                                setUser({ ...user, avatar_url: d2.publicUrl })
+                              const { data: sessionData } = await supabase.auth.getSession()
+                              const token = sessionData?.session?.access_token
+                              try {
+                                const signedRes = await fetch('/api/upload', {
+                                  method: 'POST',
+                                  headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ fileName, bucket: 'course-thumbnails' }),
+                                })
+                                const signedData = await signedRes.json()
+                                if (!signedRes.ok) { toast.error(signedData.error || 'Upload failed'); return }
+                                const uploadRes = await fetch(signedData.signedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
+                                if (!uploadRes.ok) { toast.error('Upload failed'); return }
+                                await supabase.from('profiles').update({ avatar_url: signedData.publicUrl }).eq('id', user.id)
+                                setUser({ ...user, avatar_url: signedData.publicUrl })
                                 toast.success('Photo updated!')
                                 setProfileMenuOpen(false)
-                                return
-                              }
-                              const { data } = supabase.storage.from('avatars').getPublicUrl(fileName)
-                              await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', user.id)
-                              setUser({ ...user, avatar_url: data.publicUrl })
-                              toast.success('Photo updated!')
-                              setProfileMenuOpen(false)
+                              } catch (err: any) { toast.error(err.message || 'Upload failed') }
                             }} />
                           </label>
                         </div>
@@ -265,6 +277,7 @@ export default function StudentDashboard() {
           </header>
 
           <main className="p-4 lg:p-8 space-y-6">
+            <VerifyEmailBanner />
             {/* Return to Admin banner */}
             {canAdmin && (
               <div className="bg-[#0a1628] text-white px-4 py-2.5 rounded-xl flex items-center justify-between">

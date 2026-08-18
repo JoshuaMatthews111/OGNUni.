@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { canAccessAdmin, ROLE_LABELS } from '@/lib/constants'
 import { useRole } from '@/lib/role-context'
+import { OnboardingTour } from '@/components/onboarding-tour'
 import {
   LayoutDashboard,
   BookOpen,
@@ -39,6 +40,9 @@ import {
   GraduationCap as StudentIcon,
   Wand2,
   UserCircle,
+  ChevronRight,
+  PanelLeftClose,
+  Layers,
 } from 'lucide-react'
 
 export default function AdminLayout({
@@ -49,7 +53,10 @@ export default function AdminLayout({
   const { user, viewMode, setViewMode, availableViews, viewLabel, canAdmin } = useRole()
   const [localLoading, setLocalLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [coursesExpanded, setCoursesExpanded] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -64,6 +71,9 @@ export default function AdminLayout({
         if (viewMode === 'student') {
           setViewMode('admin')
         }
+        // Show onboarding for first-time admins
+        const onboardingDone = user.onboarding_completed || (typeof window !== 'undefined' && localStorage.getItem(`ogn-onboarding-${user.id}`) === 'done')
+        if (!onboardingDone) setShowOnboarding(true)
       }
     }
   }, [user, canAdmin])
@@ -78,6 +88,17 @@ export default function AdminLayout({
   useEffect(() => {
     setSidebarOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('ogn-admin-sidebar-collapsed')
+    if (saved === 'true') setSidebarCollapsed(true)
+    // Auto-expand courses sub-nav when on courses pages
+    if (pathname.startsWith('/admin/courses') || pathname.startsWith('/admin/lessons')) setCoursesExpanded(true)
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('ogn-admin-sidebar-collapsed', String(sidebarCollapsed))
+  }, [sidebarCollapsed])
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -95,13 +116,18 @@ export default function AdminLayout({
 
   const isSuperAdmin = user?.role === 'super_admin'
 
+  const coursesSubItems = [
+    { href: '/admin/courses', label: 'Course Management', icon: Layers },
+    { href: '/admin/lessons', label: 'Sections & Lessons', icon: FileText },
+    { href: '/admin/lessons/new', label: 'Content Creator', icon: Wand2 },
+  ]
+
   const navSections = [
     {
       items: [
         { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
         { href: '/admin/users', label: 'Users', icon: Users },
-        { href: '/admin/courses', label: 'Course Builder', icon: BookOpen },
-        { href: '/admin/lessons', label: 'Content Creator', icon: Wand2 },
+        { href: '__courses__', label: 'Courses', icon: BookOpen, hasChildren: true },
         { href: '/admin/enrollments', label: 'Enrollments', icon: FileCheck },
         { href: '/admin/quizzes', label: 'Quizzes & Tests', icon: ClipboardList },
         { href: '/admin/community', label: 'Discussions', icon: MessagesSquare },
@@ -149,6 +175,9 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-[#f0f2f5]">
+      {showOnboarding && user && (
+        <OnboardingTour userId={user.id} role="admin" onComplete={() => setShowOnboarding(false)} />
+      )}
       <div className="flex">
         {/* Mobile overlay */}
         {sidebarOpen && (
@@ -156,41 +185,81 @@ export default function AdminLayout({
         )}
 
         {/* Sidebar */}
-        <aside className={`fixed lg:sticky top-0 left-0 z-50 w-[260px] h-screen overflow-y-auto bg-[#0a1628] text-white transition-transform lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <aside className={`fixed lg:sticky top-0 left-0 z-50 ${sidebarCollapsed ? 'lg:w-[68px]' : 'lg:w-[260px]'} w-[260px] h-screen overflow-y-auto bg-[#0a1628] text-white transition-all duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           {/* Logo */}
-          <div className="p-4 flex flex-col items-center border-b border-[#1a3a5c]">
-            <Image src="/assets/ogn-logo-small.png" alt="OGN University" width={80} height={64} className="mb-2 object-contain" />
-            <h2 className="text-sm font-bold text-[#c9a227] tracking-wide">OGN UNIVERSITY</h2>
-            <p className="text-[10px] text-gray-400 tracking-widest">OVERCOMERS GLOBAL NETWORK</p>
+          <div className={`p-4 flex flex-col items-center border-b border-[#1a3a5c] ${sidebarCollapsed ? 'px-2' : ''}`}>
+            <Image src="/assets/ogn-logo-small.png" alt="OGN University" width={sidebarCollapsed ? 36 : 80} height={sidebarCollapsed ? 28 : 64} className="mb-2 object-contain" />
+            {!sidebarCollapsed && <>
+              <h2 className="text-sm font-bold text-[#c9a227] tracking-wide">OGN UNIVERSITY</h2>
+              <p className="text-[10px] text-gray-400 tracking-widest">OVERCOMERS GLOBAL NETWORK</p>
+            </>}
           </div>
 
           {/* Mode badge */}
-          <div className="mx-4 mt-4 mb-2">
-            <div className={`${currentMode.color} text-xs font-bold text-center py-1.5 rounded-md tracking-wide`}>
-              {currentMode.label.toUpperCase()}
+          {!sidebarCollapsed && (
+            <div className="mx-4 mt-4 mb-2">
+              <div className={`${currentMode.color} text-xs font-bold text-center py-1.5 rounded-md tracking-wide`}>
+                {currentMode.label.toUpperCase()}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Nav */}
-          <nav className="px-2 mt-2 space-y-0.5">
+          <nav className={`${sidebarCollapsed ? 'px-1' : 'px-2'} mt-2 space-y-0.5`}>
             {navSections.map((section, si) => (
               <div key={si}>
                 {si > 0 && <div className="border-t border-[#1a3a5c] my-3 mx-2" />}
-                {section.items.map((item) => {
+                {section.items.map((item: any) => {
                   const Icon = item.icon
+                  if (item.hasChildren) {
+                    const isCoursesActive = pathname.startsWith('/admin/courses') || pathname.startsWith('/admin/lessons')
+                    return (
+                      <div key={item.href}>
+                        <button
+                          onClick={() => { if (sidebarCollapsed) { setSidebarCollapsed(false); setCoursesExpanded(true) } else setCoursesExpanded(!coursesExpanded) }}
+                          className={`w-full flex items-center gap-3 ${sidebarCollapsed ? 'px-2 justify-center' : 'px-4'} py-2.5 rounded-lg text-sm transition-all ${
+                            isCoursesActive
+                              ? 'bg-[#c9a227] text-[#0a1628] font-semibold shadow-lg shadow-[#c9a227]/20'
+                              : 'text-gray-300 hover:bg-[#1a3a5c] hover:text-white'
+                          }`}
+                          title={sidebarCollapsed ? item.label : undefined}
+                        >
+                          <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                          {!sidebarCollapsed && <><span className="flex-1 text-left">{item.label}</span><ChevronRight className={`w-3.5 h-3.5 transition-transform ${coursesExpanded ? 'rotate-90' : ''}`} /></>}
+                        </button>
+                        {coursesExpanded && !sidebarCollapsed && (
+                          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-[#1a3a5c] pl-3">
+                            {coursesSubItems.map((sub) => {
+                              const SubIcon = sub.icon
+                              const subActive = pathname === sub.href || (sub.href !== '/admin/courses' && pathname.startsWith(sub.href))
+                              return (
+                                <Link key={sub.href} href={sub.href}
+                                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all ${
+                                    subActive ? 'bg-[#c9a227] text-[#0a1628] font-semibold' : 'text-gray-400 hover:bg-[#1a3a5c] hover:text-white'
+                                  }`}>
+                                  <SubIcon className="w-3.5 h-3.5" /><span>{sub.label}</span>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
                   const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href))
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all ${
+                      className={`flex items-center gap-3 ${sidebarCollapsed ? 'px-2 justify-center' : 'px-4'} py-2.5 rounded-lg text-sm transition-all ${
                         isActive
                           ? 'bg-[#c9a227] text-[#0a1628] font-semibold shadow-lg shadow-[#c9a227]/20'
                           : 'text-gray-300 hover:bg-[#1a3a5c] hover:text-white'
                       }`}
+                      title={sidebarCollapsed ? item.label : undefined}
                     >
-                      <Icon className="w-[18px] h-[18px]" />
-                      <span>{item.label}</span>
+                      <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                      {!sidebarCollapsed && <span>{item.label}</span>}
                     </Link>
                   )
                 })}
@@ -199,41 +268,48 @@ export default function AdminLayout({
           </nav>
 
           {/* Quick Actions */}
-          <div className="px-4 mt-6">
-            <p className="text-[11px] text-gray-500 font-semibold tracking-wider mb-2 px-1">QUICK ACTIONS</p>
-            {quickActions.map((action) => {
-              const Icon = action.icon
-              return (
-                <Link
-                  key={action.href}
-                  href={action.href}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-400 hover:text-[#c9a227] transition-colors"
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{action.label}</span>
-                </Link>
-              )
-            })}
+          {!sidebarCollapsed && (
+            <div className="px-4 mt-6">
+              <p className="text-[11px] text-gray-500 font-semibold tracking-wider mb-2 px-1">QUICK ACTIONS</p>
+              {quickActions.map((action) => {
+                const Icon = action.icon
+                return (
+                  <Link key={action.href} href={action.href} className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-400 hover:text-[#c9a227] transition-colors">
+                    <Icon className="w-3.5 h-3.5" /><span>{action.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Collapse toggle (desktop) */}
+          <div className="hidden lg:block px-3 mt-4">
+            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-gray-500 hover:text-[#c9a227] hover:bg-[#1a3a5c] rounded-lg transition-colors" title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+              <PanelLeftClose className={`w-4 h-4 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} />
+              {!sidebarCollapsed && <span>Collapse</span>}
+            </button>
           </div>
 
           {/* User profile at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[#1a3a5c] bg-[#0a1628]">
-            <div className="flex items-center gap-3">
+          <div className={`absolute bottom-0 left-0 right-0 ${sidebarCollapsed ? 'p-2' : 'p-4'} border-t border-[#1a3a5c] bg-[#0a1628]`}>
+            <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
               {user?.avatar_url ? (
-                <img src={user.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                <img src={user.avatar_url} alt="" className={`${sidebarCollapsed ? 'w-8 h-8' : 'w-10 h-10'} rounded-full object-cover`} />
               ) : (
-                <div className="w-10 h-10 rounded-full bg-[#1a3a5c] flex items-center justify-center text-[#c9a227] font-bold text-sm">
+                <div className={`${sidebarCollapsed ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} rounded-full bg-[#1a3a5c] flex items-center justify-center text-[#c9a227] font-bold`}>
                   {user?.full_name?.charAt(0) || 'A'}
                 </div>
               )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Admin'}</p>
-                <p className="text-[10px] text-[#c9a227]">{currentMode.label}</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                  <span className="text-[10px] text-green-400">Online</span>
+              {!sidebarCollapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Admin'}</p>
+                  <p className="text-[10px] text-[#c9a227]">{currentMode.label}</p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                    <span className="text-[10px] text-green-400">Online</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -242,7 +318,7 @@ export default function AdminLayout({
         </aside>
 
         {/* Main area */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 transition-all duration-300">
           {/* Top header */}
           <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 lg:px-8 py-3">
             <div className="flex items-center justify-between">

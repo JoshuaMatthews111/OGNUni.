@@ -1,0 +1,279 @@
+{
+  "volumes": [
+    {
+      "key": "volume-1",
+      "dir": "/Users/user/Downloads/VOLUME-I",
+      "slug": "secrets-of-the-mind-volume-1",
+      "title": "Secrets of the Mind & the New Creation — Volume I",
+      "subtitle": "The Inner World",
+      "durationLabel": "2h 39m",
+      "covers": {
+        "front": "https://jsnyvccyghfpjwhvjfyr.supabase.co/storage/v1/object/public/product-covers/volume-1/front-cover.png",
+        "back": "https://jsnyvccyghfpjwhvjfyr.supabase.co/storage/v1/object/public/product-covers/volume-1/back-cover.png"
+      },
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "The Mystery of the New Creation Man",
+          "storage_path": "volume-1/01-the-mystery-of-the-new-creation-man.mp3",
+          "file_size": 15844450,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 2,
+          "title": "Your Mind Must Catch Up With Your Spirit",
+          "storage_path": "volume-1/02-your-mind-must-catch-up-with-your-spirit.mp3",
+          "file_size": 16767100,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 3,
+          "title": "The Organ of Creation Imagination",
+          "storage_path": "volume-1/03-the-organ-of-creation-imagination.mp3",
+          "file_size": 15641739,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 4,
+          "title": "The Gates of the Mind",
+          "storage_path": "volume-1/04-the-gates-of-the-mind.mp3",
+          "file_size": 14862232,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 5,
+          "title": "Meditation Releasing Wrong Images",
+          "storage_path": "volume-1/05-meditation-releasing-wrong-images.mp3",
+          "file_size": 41895845,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 6,
+          "title": "Structuring Your Mind to Agree With Heaven",
+          "storage_path": "volume-1/06-structuring-your-mind-to-agree-with-heaven.mp3",
+          "file_size": 14936441,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 7,
+          "title": "Thought Emotion Action",
+          "storage_path": "volume-1/07-thought-emotion-action.mp3",
+          "file_size": 15560229,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 8,
+          "title": "The Power of 'I AM'",
+          "storage_path": "volume-1/08-the-power-of-i-am.mp3",
+          "file_size": 14907161,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 9,
+          "title": "Full Persuasion",
+          "storage_path": "volume-1/09-full-persuasion.mp3",
+          "file_size": 15104643,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 10,
+          "title": "Meditation I AM - New Creation Identity",
+          "storage_path": "volume-1/10-meditation-i-am-new-creation-identity.mp3",
+          "file_size": 37961811,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 11,
+          "title": "The Image Within",
+          "storage_path": "volume-1/11-the-image-within.mp3",
+          "file_size": 14553983,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 12,
+          "title": "The Promise Is Greater Than the Picture",
+          "storage_path": "volume-1/12-the-promise-is-greater-than-the-picture.mp3",
+          "file_size": 16702317,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 13,
+          "title": "Refusing to Bow to What You See",
+          "storage_path": "volume-1/13-refusing-to-bow-to-what-you-see.mp3",
+          "file_size": 14003337,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 14,
+          "title": "Making the Word Visible Within",
+          "storage_path": "volume-1/14-making-the-word-visible-within.mp3",
+          "file_size": 15640691,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 15,
+          "title": "Meditation Healing the Images of People",
+          "storage_path": "volume-1/15-meditation-healing-the-images-of-people.mp3",
+          "file_size": 38755934,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 16,
+          "title": "The Heart The Place of Agreement",
+          "storage_path": "volume-1/16-the-heart-the-place-of-agreement.mp3",
+          "file_size": 15144368,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 17,
+          "title": "The Inward Journey of Prayer",
+          "storage_path": "volume-1/17-the-inward-journey-of-prayer.mp3",
+          "file_size": 14499661,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 18,
+          "title": "Attracting a Godly Marriage & Relationship",
+          "storage_path": "volume-1/18-attracting-a-godly-marriage-and-relationship.mp3",
+          "file_size": 15286483,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 19,
+          "title": "Meditation Preparing for Covenant Love",
+          "storage_path": "volume-1/19-meditation-preparing-for-covenant-love.mp3",
+          "file_size": 38053761,
+          "mime_type": "audio/mpeg"
+        }
+      ],
+      "trackCount": 19
+    },
+    {
+      "key": "volume-2",
+      "dir": "/Users/user/Downloads/VOLUME-II",
+      "slug": "secrets-of-the-mind-volume-2",
+      "title": "Secrets of the Mind & the New Creation — Volume II",
+      "subtitle": "Influencing the Natural World",
+      "durationLabel": "1h 56m",
+      "covers": {
+        "front": "https://jsnyvccyghfpjwhvjfyr.supabase.co/storage/v1/object/public/product-covers/volume-2/front-cover.png",
+        "back": "https://jsnyvccyghfpjwhvjfyr.supabase.co/storage/v1/object/public/product-covers/volume-2/back-cover.png"
+      },
+      "tracks": [
+        {
+          "track_number": 1,
+          "title": "Faith Has a Voice",
+          "storage_path": "volume-2/01-faith-has-a-voice.mp3",
+          "file_size": 17498177,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 2,
+          "title": "Action Giving the Inner World Physical Expression",
+          "storage_path": "volume-2/02-action-giving-the-inner-world-physical-expression.mp3",
+          "file_size": 16830520,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 3,
+          "title": "Remaining in Faith Until the Promise Manifests",
+          "storage_path": "volume-2/03-remaining-in-faith-until-the-promise-manifests.mp3",
+          "file_size": 18532655,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 4,
+          "title": "Wisdom for the Promise",
+          "storage_path": "volume-2/04-wisdom-for-the-promise.mp3",
+          "file_size": 16571358,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 5,
+          "title": "Divine Direction & Decision Making",
+          "storage_path": "volume-2/05-divine-direction-and-decision-making.mp3",
+          "file_size": 17153378,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 6,
+          "title": "Gods Vessels on Earth",
+          "storage_path": "volume-2/06-gods-vessels-on-earth.mp3",
+          "file_size": 17304878,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 7,
+          "title": "The Mystery of Giving & Honor",
+          "storage_path": "volume-2/07-the-mystery-of-giving-and-honor.mp3",
+          "file_size": 16776165,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 8,
+          "title": "Giving & Divine Intervention",
+          "storage_path": "volume-2/08-giving-and-divine-intervention.mp3",
+          "file_size": 17542074,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 9,
+          "title": "Money Is a Defense",
+          "storage_path": "volume-2/09-money-is-a-defense.mp3",
+          "file_size": 16880643,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 10,
+          "title": "Developing the Mindset of Provision & Prosperity",
+          "storage_path": "volume-2/10-developing-the-mindset-of-provision-and-prosperity.mp3",
+          "file_size": 17123091,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 11,
+          "title": "Meditation Provision & Prosperity",
+          "storage_path": "volume-2/11-meditation-provision-and-prosperity.mp3",
+          "file_size": 36480856,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 12,
+          "title": "The Mind of Christ in the Marketplace & Natural World",
+          "storage_path": "volume-2/12-the-mind-of-christ-in-the-marketplace-and-natural-world.mp3",
+          "file_size": 14085577,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 13,
+          "title": "Living From the Supernatural Heart of God",
+          "storage_path": "volume-2/13-living-from-the-supernatural-heart-of-god.mp3",
+          "file_size": 13996749,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 14,
+          "title": "Influencing the Natural World From the Supernatural",
+          "storage_path": "volume-2/14-influencing-the-natural-world-from-the-supernatural.mp3",
+          "file_size": 14626833,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 15,
+          "title": "From Promise to Manifestation",
+          "storage_path": "volume-2/15-from-promise-to-manifestation.mp3",
+          "file_size": 15371823,
+          "mime_type": "audio/mpeg"
+        },
+        {
+          "track_number": 16,
+          "title": "Final Meditation The New Creation Experience",
+          "storage_path": "volume-2/16-final-meditation-the-new-creation-experience.mp3",
+          "file_size": 39354337,
+          "mime_type": "audio/mpeg"
+        }
+      ],
+      "trackCount": 16
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Search, BookOpen, Users, Clock } from 'lucide-react'
-import { COURSE_CATEGORIES } from '@/lib/constants'
+import { COURSE_CATEGORIES, CATEGORY_DESCRIPTIONS } from '@/lib/constants'
 
 export default function CoursesPage() {
   const supabase = createClient()
@@ -29,6 +29,26 @@ export default function CoursesPage() {
     setCourses(data || [])
     setLoading(false)
   }
+
+  /**
+   * Categories that actually have published courses, in the canonical teaching
+   * order, with counts. Anything with a category not in the constant list (an
+   * older custom value) is appended so it never disappears from the catalogue.
+   */
+  const activeCategories: [string, number][] = (() => {
+    const counts = new Map<string, number>()
+    for (const c of courses) {
+      if (!c.category) continue
+      counts.set(c.category, (counts.get(c.category) || 0) + 1)
+    }
+    const ordered: [string, number][] = []
+    for (const cat of COURSE_CATEGORIES) {
+      const n = counts.get(cat)
+      if (n) { ordered.push([cat, n]); counts.delete(cat) }
+    }
+    for (const [cat, n] of counts) ordered.push([cat, n])
+    return ordered
+  })()
 
   const filtered = courses.filter((c) => {
     const matchSearch = c.title.toLowerCase().includes(search.toLowerCase()) || c.description?.toLowerCase().includes(search.toLowerCase())
@@ -54,18 +74,27 @@ export default function CoursesPage() {
         </div>
       </div>
 
-      {/* Category Filters */}
+      {/* Category Filters — only categories that actually have courses */}
       <div className="container mx-auto px-6 py-6">
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setCategory('')} className={`px-4 py-2 rounded-full text-sm transition-all ${!category ? 'bg-[#0a1628] text-[#c9a227] font-semibold' : 'bg-white border hover:border-[#c9a227] text-gray-600'}`}>
             All Courses
+            <span className="ml-2 text-xs opacity-60">{courses.length}</span>
           </button>
-          {COURSE_CATEGORIES.map((cat) => (
+          {activeCategories.map(([cat, count]) => (
             <button key={cat} onClick={() => setCategory(cat)} className={`px-4 py-2 rounded-full text-sm transition-all ${category === cat ? 'bg-[#0a1628] text-[#c9a227] font-semibold' : 'bg-white border hover:border-[#c9a227] text-gray-600'}`}>
               {cat}
+              <span className="ml-2 text-xs opacity-60">{count}</span>
             </button>
           ))}
         </div>
+
+        {/* The chosen category, explained in the voice of the teaching */}
+        {category && CATEGORY_DESCRIPTIONS[category] && (
+          <p className="mt-5 text-gray-600 max-w-3xl border-l-2 border-[#c9a227] pl-4">
+            {CATEGORY_DESCRIPTIONS[category]}
+          </p>
+        )}
       </div>
 
       {/* Course Grid */}

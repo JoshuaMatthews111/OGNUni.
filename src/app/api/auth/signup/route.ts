@@ -18,7 +18,9 @@ export async function POST(request: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-    // Create user via Admin API (does NOT send Supabase's built-in email)
+    // Create user via Admin API, already confirmed so they can sign in
+    // immediately with their password. Email verification is tracked
+    // app-side via user_metadata.email_verified and the dashboard banner.
     const createRes = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
       method: 'POST',
       headers: {
@@ -29,8 +31,8 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         email,
         password,
-        email_confirm: false,
-        user_metadata: { full_name: name || '' },
+        email_confirm: true,
+        user_metadata: { full_name: name || '', email_verified: false },
       }),
     })
 
@@ -45,7 +47,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: createData.msg || createData.message || 'Failed to create account' }, { status: 500 })
     }
 
-    // Now generate a verification link for this user
+    // Generate a verification link (magiclink works for confirmed users;
+    // clicking it signs them in and marks email_verified via /auth/confirm)
     const linkRes = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
       method: 'POST',
       headers: {
@@ -54,7 +57,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${serviceKey}`,
       },
       body: JSON.stringify({
-        type: 'signup',
+        type: 'magiclink',
         email,
         options: {
           redirectTo: `${SITE_URL}/auth/callback`,
@@ -71,54 +74,24 @@ export async function POST(request: Request) {
         try {
           const url = new URL(linkData.action_link)
           const token = url.searchParams.get('token')
-          const type = url.searchParams.get('type') || 'signup'
+          const type = url.searchParams.get('type') || 'magiclink'
           confirmLink = `${SITE_URL}/auth/confirm?token_hash=${token}&type=${type}`
         } catch {
           confirmLink = `${SITE_URL}`
         }
       }
-    } else {
-      // Fallback: try magiclink type
-      const fallbackRes = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({
-          type: 'magiclink',
-          email,
-          options: {
-            redirectTo: `${SITE_URL}/auth/callback`,
-          },
-        }),
-      })
-      if (fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json()
-        if (fallbackData.action_link) {
-          try {
-            const url = new URL(fallbackData.action_link)
-            const token = url.searchParams.get('token')
-            const type = url.searchParams.get('type') || 'magiclink'
-            confirmLink = `${SITE_URL}/auth/confirm?token_hash=${token}&type=${type}`
-          } catch {
-            confirmLink = `${SITE_URL}`
-          }
-        }
-      }
     }
 
     // Send branded verification email via SendGrid (NOT Supabase's email)
-    await sendEmail({
+    const emailSent = await sendEmail({
       to: email,
       toName: name,
       subject: 'Verify Your OGN University Account',
       htmlBody: `<h2>Welcome to OGN University, ${name || 'Student'}!</h2>
         <p>We're honored to have you join the OGN University family. Your journey in studying the things of God begins now.</p>
-        <p><strong>Click the button below to verify your email and activate your account:</strong></p>
-        <a href="${confirmLink}" class="btn">Verify My Account & Get Started</a>
-        <p style="margin-top:25px">Once verified, you'll have instant access to:</p>
+        <p><strong>Click the button below to verify your email:</strong></p>
+        <a href="${confirmLink}" class="btn">Verify My Email</a>
+        <p style="margin-top:25px">You already have full access to:</p>
         <ul>
           <li>Comprehensive theological courses</li>
           <li>Interactive lessons and quizzes</li>
@@ -139,14 +112,13 @@ export async function POST(request: Request) {
         subject: `New Student Signup: ${name || email}`,
         htmlBody: `<h2>New Student Registration</h2>
           <p><strong>${name || 'Unknown'}</strong> (${email}) has signed up for OGN University.</p>
-          <p>They are awaiting email verification.</p>
           <a href="${SITE_URL}/admin" class="btn">View Admin Panel</a>`,
         templateType: 'admin_notification',
         metadata: { email, name },
       })
     } catch {}
 
-    return NextResponse.json({ success: true, message: 'Account created! Check your email to verify.' })
+    return NextResponse.json({ success: true, emailSent, message: 'Account created!' })
   } catch (error: any) {
     console.error('Signup error:', error)
     return NextResponse.json({ error: error.message || 'Signup failed' }, { status: 500 })

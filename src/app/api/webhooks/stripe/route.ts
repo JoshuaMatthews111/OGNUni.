@@ -91,10 +91,97 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         stripe_payment_intent_id: session.payment_intent as string,
       })
     }
+  } else if (metadata.type === 'product_purchase') {
+    await fulfilProductPurchase(session, metadata.userId, metadata.productId)
   } else if (metadata.type === 'membership' || metadata.type === 'mentoring') {
     // Subscription will be handled by subscription webhooks
     console.log('Subscription checkout completed, waiting for subscription webhook')
   }
+}
+
+/**
+ * Grants download access to a purchased product. When the product is a bundle,
+ * a row is written for the bundle AND for every product it contains, so the
+ * library and the download endpoint only ever have to check one table.
+ *
+ * Idempotent: product_purchases has a unique (user_id, product_id) constraint
+ * and we upsert, so Stripe retrying the same event is harmless.
+ */
+async function fulfilProductPurchase(
+  session: Stripe.Checkout.Session,
+  userId: string,
+  productId: string
+) {
+  if (!productId) {
+    console.error('product_purchase webhook missing productId')
+    return
+  }
+
+  const { data: product } = await supabase
+    .from('products')
+    .select('id, title, slug, is_bundle')
+    .eq('id', productId)
+    .single()
+
+  if (!product) {
+    console.error('product_purchase webhook: unknown product', productId)
+    return
+  }
+
+  // The bundle itself, plus anything it unlocks.
+  const productIds = [product.id]
+  if (product.is_bundle) {
+    const { data: items } = await supabase
+      .from('bundle_items')
+      .select('product_id')
+      .eq('bundle_id', product.id)
+    for (const item of items || []) {
+      if (!productIds.includes(item.product_id)) productIds.push(item.product_id)
+    }
+  }
+
+  const amount = (session.amount_total || 0) / 100
+
+  const rows = productIds.map((id) => ({
+    user_id: userId,
+    product_id: id,
+    email: session.customer_details?.email || session.customer_email || null,
+    // The money lands on the purchased product; unlocked items record as 0.
+    amount: id === product.id ? amount : 0,
+    currency: session.currency || 'usd',
+    status: 'completed',
+    source: id === product.id ? 'stripe' : 'bundle',
+    stripe_session_id: session.id,
+    stripe_payment_intent_id: (session.payment_intent as string) || null,
+  }))
+
+  const { error: purchaseError } = await supabase
+    .from('product_purchases')
+    .upsert(rows, { onConflict: 'user_id,product_id', ignoreDuplicates: false })
+
+  if (purchaseError) {
+    console.error('Error recording product purchase:', purchaseError)
+    return
+  }
+
+  // Mirror into the existing payments table so admin revenue reporting sees it.
+  await supabase.from('payments').insert({
+    user_id: userId,
+    amount,
+    currency: session.currency || 'usd',
+    status: 'completed',
+    payment_type: 'product_purchase',
+    stripe_session_id: session.id,
+    stripe_payment_intent_id: (session.payment_intent as string) || null,
+  })
+
+  await supabase.rpc('create_notification', {
+    p_user_id: userId,
+    p_type: 'product_purchase',
+    p_title: 'Your download is ready',
+    p_content: `${product.title} is now in your library.`,
+    p_link: '/library',
+  })
 }
 
 async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {

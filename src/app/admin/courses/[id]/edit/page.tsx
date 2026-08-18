@@ -8,12 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { COURSE_CATEGORIES, VISIBILITY_OPTIONS, extractYouTubeId, youtubeEmbedUrl } from '@/lib/constants'
+import { COURSE_CATEGORIES, VISIBILITY_OPTIONS, extractYouTubeId, youtubeEmbedUrl, STORAGE_FILE_LIMIT } from '@/lib/constants'
 import {
   ArrowLeft, Save, Eye, Plus, Trash2, GripVertical, Youtube, FileText,
   Sparkles, Upload, Link2, Wand2, ChevronDown, ChevronUp, Music,
   Video, FileUp, Loader2, BookOpen, PenTool, X, ArrowUp, ArrowDown,
-  Pencil, Play, File
+  Pencil, Play, File, Copy, Camera
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -47,6 +47,8 @@ export default function EditCoursePage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [modules, setModules] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [instructors, setInstructors] = useState<any[]>([])
+  const [allTeachers, setAllTeachers] = useState<any[]>([])
   const [showAddLesson, setShowAddLesson] = useState(false)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
   const [showContentBuilder, setShowContentBuilder] = useState(false)
@@ -75,6 +77,8 @@ export default function EditCoursePage() {
   const [bulkLinks, setBulkLinks] = useState('')
   const [bulkUploading, setBulkUploading] = useState(false)
   const [bulkFiles, setBulkFiles] = useState<File[]>([])
+  const [uploadQueue, setUploadQueue] = useState<{ file: File; status: 'pending' | 'uploading' | 'done' | 'failed'; progress: number; error?: string }[]>([])
+  const [dragActive, setDragActive] = useState(false)
 
   // Content builder state
   const [cbTranscript, setCbTranscript] = useState('')
@@ -111,6 +115,18 @@ export default function EditCoursePage() {
       const { data: lessonsData } = await supabase.from('lessons').select('*').in('module_id', moduleIds).order('order_index')
       setLessons(lessonsData || [])
     }
+
+    // Load instructors (the main instructor + any co-instructors)
+    const instructorIds = [courseData.instructor_id, ...(courseData.co_instructor_ids || [])].filter(Boolean)
+    if (instructorIds.length > 0) {
+      const { data: instrData } = await supabase.from('profiles').select('id, full_name, avatar_url, role').in('id', instructorIds)
+      setInstructors(instrData || [])
+    }
+
+    // Load all available teachers/admins for the instructor selector
+    const { data: teacherData } = await supabase.from('profiles').select('id, full_name, avatar_url, role').in('role', ['super_admin', 'prophet', 'teacher', 'minister']).order('full_name')
+    setAllTeachers(teacherData || [])
+
     setLoading(false)
   }
 
@@ -122,6 +138,7 @@ export default function EditCoursePage() {
       category: course.category, is_free: course.is_free,
       price: course.is_free ? 0 : course.price, visibility: course.visibility,
       thumbnail_url: course.thumbnail_url,
+      instructor_id: course.instructor_id,
     }).eq('id', params.id)
     setSaving(false)
     if (error) toast.error('Failed to save: ' + error.message)
@@ -259,40 +276,149 @@ export default function EditCoursePage() {
     setBulkLinks(''); setShowBulkUpload(false); setBulkUploading(false); loadCourse()
   }
 
-  const handleBulkFiles = async () => {
-    if (bulkFiles.length === 0) return
+  const handleBulkFiles = async (filesToUpload?: File[]) => {
+    const files = filesToUpload || bulkFiles
+    if (files.length === 0) return
     setBulkUploading(true)
+
+    // Init queue
+    const queue = files.map(f => ({ file: f, status: 'pending' as const, progress: 0 }))
+    setUploadQueue(queue)
+
     let moduleId = modules[0]?.id
     if (!moduleId) {
       const { data: m } = await supabase.from('modules').insert({ course_id: params.id, title: 'Main Module', order_index: 0 }).select().single()
-      if (!m) { toast.error('Failed'); setBulkUploading(false); return }
+      if (!m) { toast.error('Failed to create section'); setBulkUploading(false); return }
       moduleId = m.id
     }
+
     let added = 0
-    for (let i = 0; i < bulkFiles.length; i++) {
-      const file = bulkFiles[i]
-      const ext = file.name.split('.').pop()?.toLowerCase()
-      const fileName = `lesson-${Date.now()}-${i}.${ext}`
-      const { error: upErr } = await supabase.storage.from('course-thumbnails').upload(fileName, file)
-      if (upErr) { toast.error(`Upload failed: ${file.name}`); continue }
-      const { data: urlData } = supabase.storage.from('course-thumbnails').getPublicUrl(fileName)
-      const url = urlData.publicUrl
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'uploading', progress: 10 } : q))
+
+      const ext = file.name.split('.').pop()?.toLowerCase() || ''
+      const fileName = `lesson-${params.id}-${Date.now()}-${i}.${ext}`
+
+      // Supabase enforces a hard per-file cap (50MB on the current plan). Fail
+      // fast with a useful instruction instead of letting storage reject it
+      // after the whole file has been pushed up.
+      if (file.size > STORAGE_FILE_LIMIT) {
+        const mb = (file.size / 1048576).toFixed(0)
+        setUploadQueue(prev => prev.map((q, idx) => idx === i ? {
+          ...q, status: 'failed',
+          error: `${mb}MB — over the ${STORAGE_FILE_LIMIT / 1048576}MB limit. Upload to YouTube and paste the link instead.`,
+        } : q))
+        toast.error(`${file.name} is too big (${mb}MB)`, {
+          description: 'Put long videos on YouTube and paste the link into the lesson — there is no size limit that way.',
+        })
+        continue
+      }
+
+      // Upload via signed URL (client → Supabase directly, so the file never
+      // passes through the Vercel function and its request-body limit).
+      let uploadSuccess = false
+      let uploadError = ''
+      let url = ''
+
+      // Get auth token for API call
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, progress: 10 + attempt * 10 } : q))
+
+          // Step 1: Get signed upload URL from our API
+          const signedRes = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileName, bucket: 'lesson-media' }),
+          })
+          const signedData = await signedRes.json()
+          if (!signedRes.ok) {
+            uploadError = signedData.error || `Failed to get upload URL (${signedRes.status})`
+            if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+            continue
+          }
+
+          setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, progress: 30 + attempt * 10 } : q))
+
+          // Step 2: Upload file directly to Supabase using signed URL
+          const uploadRes = await fetch(signedData.signedUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type },
+            body: file,
+          })
+
+          if (!uploadRes.ok) {
+            const errText = await uploadRes.text().catch(() => '')
+            uploadError = `Upload to storage failed (${uploadRes.status}): ${errText.slice(0, 100)}`
+            if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+            continue
+          }
+
+          setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, progress: 80 } : q))
+          url = signedData.publicUrl
+          uploadSuccess = true
+          break
+        } catch (err: any) {
+          uploadError = err.message || 'Network error'
+          if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)))
+        }
+      }
+
+      if (!uploadSuccess) {
+        setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'failed', error: uploadError } : q))
+        toast.error(`Upload failed: ${file.name} - ${uploadError}`)
+        continue
+      }
+
+      setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, progress: 85 } : q))
       const isPdf = ext === 'pdf'
-      const isAudio = ['mp3', 'wav', 'ogg', 'm4a'].includes(ext || '')
-      const isVideo = ['mp4', 'webm', 'mov'].includes(ext || '')
-      const isDoc = ['doc', 'docx'].includes(ext || '')
+      const isAudio = ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)
+      const isVideo = ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)
+      const isDoc = ['doc', 'docx'].includes(ext)
       const title = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')
 
-      const { error } = await supabase.from('lessons').insert({
-        module_id: moduleId, title, content_type: isPdf ? 'pdf' : isAudio ? 'audio' : isVideo ? 'video' : 'text',
-        order_index: lessons.length + i, pdf_url: isPdf || isDoc ? url : null,
-        audio_url: isAudio ? url : null, content_url: isVideo ? url : null,
+      const lessonData: any = {
+        module_id: moduleId, title,
+        content_type: isPdf ? 'pdf' : isAudio ? 'audio' : isVideo ? 'video' : isDoc ? 'document' : 'text',
+        order_index: lessons.length + i,
         is_required: true, quiz_required: false,
-      })
-      if (!error) added++
+      }
+      if (isPdf || isDoc) lessonData.pdf_url = url
+      if (isAudio) lessonData.audio_url = url
+      if (isVideo) lessonData.vimeo_url = url // store video URL in vimeo_url field for playback
+
+      const { error } = await supabase.from('lessons').insert(lessonData)
+      if (error) {
+        setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'failed', error: error.message } : q))
+        toast.error(`Lesson creation failed: ${file.name} - ${error.message}`)
+      } else {
+        setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'done', progress: 100 } : q))
+        added++
+      }
     }
-    toast.success(`${added} file(s) uploaded as lessons!`)
-    setBulkFiles([]); setShowBulkUpload(false); setBulkUploading(false); loadCourse()
+
+    if (added > 0) toast.success(`${added} of ${files.length} file(s) uploaded as lessons!`)
+    setBulkUploading(false)
+    if (added > 0) { setBulkFiles([]); loadCourse() }
+  }
+
+  const retryUpload = async (index: number) => {
+    const item = uploadQueue[index]
+    if (!item) return
+    handleBulkFiles([item.file])
+  }
+
+  const handleFileDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(true) }
+  const handleFileDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragActive(false) }
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation(); setDragActive(false)
+    const files = Array.from(e.dataTransfer.files).filter(f => /\.(mp4|webm|mov|avi|mkv|mp3|wav|ogg|m4a|pdf|doc|docx)$/i.test(f.name))
+    if (files.length > 0) { setBulkFiles(prev => [...prev, ...files]); setShowBulkUpload(true) }
+    else toast.error('No supported files detected. Use video, audio, PDF, or document files.')
   }
 
   // ── AI CONTENT BUILDER ──
@@ -448,7 +574,7 @@ export default function EditCoursePage() {
     }
   }
 
-  // ── DRAG & DROP LESSONS ──
+  // ── DRAG & DROP LESSONS (cross-section support) ──
   const handleDragStart = (lessonId: string) => {
     setDragLessonId(lessonId)
   }
@@ -458,29 +584,73 @@ export default function EditCoursePage() {
     if (lessonId !== dragLessonId) setDragOverLessonId(lessonId)
   }
 
-  const handleDrop = async (moduleId: string) => {
-    if (!dragLessonId || !dragOverLessonId) { setDragLessonId(null); setDragOverLessonId(null); return }
-    const modLessons = lessons.filter(l => l.module_id === moduleId).sort((a, b) => a.order_index - b.order_index)
-    const fromIdx = modLessons.findIndex(l => l.id === dragLessonId)
-    const toIdx = modLessons.findIndex(l => l.id === dragOverLessonId)
-    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) { setDragLessonId(null); setDragOverLessonId(null); return }
+  const handleDrop = async (targetModuleId: string) => {
+    if (!dragLessonId) { setDragLessonId(null); setDragOverLessonId(null); return }
 
-    // Reorder
-    const reordered = [...modLessons]
-    const [moved] = reordered.splice(fromIdx, 1)
-    reordered.splice(toIdx, 0, moved)
+    const draggedLesson = lessons.find(l => l.id === dragLessonId)
+    if (!draggedLesson) { setDragLessonId(null); setDragOverLessonId(null); return }
 
-    // Save to DB
-    for (let i = 0; i < reordered.length; i++) {
-      if (reordered[i].order_index !== i) {
-        await supabase.from('lessons').update({ order_index: i }).eq('id', reordered[i].id)
+    const sourceModuleId = draggedLesson.module_id
+    const targetLessons = lessons.filter(l => l.module_id === targetModuleId).sort((a, b) => a.order_index - b.order_index)
+
+    // If dropping on a specific lesson, insert at that position
+    let insertIdx = targetLessons.length
+    if (dragOverLessonId) {
+      const overIdx = targetLessons.findIndex(l => l.id === dragOverLessonId)
+      if (overIdx !== -1) insertIdx = overIdx
+    }
+
+    // Same module reorder
+    if (sourceModuleId === targetModuleId) {
+      const fromIdx = targetLessons.findIndex(l => l.id === dragLessonId)
+      if (fromIdx === -1 || fromIdx === insertIdx) { setDragLessonId(null); setDragOverLessonId(null); return }
+      const reordered = [...targetLessons]
+      const [moved] = reordered.splice(fromIdx, 1)
+      reordered.splice(insertIdx > fromIdx ? insertIdx - 1 : insertIdx, 0, moved)
+      for (let i = 0; i < reordered.length; i++) {
+        if (reordered[i].order_index !== i) {
+          await supabase.from('lessons').update({ order_index: i }).eq('id', reordered[i].id)
+        }
+      }
+    } else {
+      // Cross-section move: update module_id and reorder both
+      await supabase.from('lessons').update({ module_id: targetModuleId, order_index: insertIdx }).eq('id', dragLessonId)
+      // Reorder source module
+      const sourceLessons = lessons.filter(l => l.module_id === sourceModuleId && l.id !== dragLessonId).sort((a, b) => a.order_index - b.order_index)
+      for (let i = 0; i < sourceLessons.length; i++) {
+        if (sourceLessons[i].order_index !== i) {
+          await supabase.from('lessons').update({ order_index: i }).eq('id', sourceLessons[i].id)
+        }
+      }
+      // Reorder target module (push existing items after insert point)
+      const newTargetLessons = [...targetLessons]
+      newTargetLessons.splice(insertIdx, 0, { ...draggedLesson, module_id: targetModuleId } as any)
+      for (let i = 0; i < newTargetLessons.length; i++) {
+        if (newTargetLessons[i].id !== dragLessonId && newTargetLessons[i].order_index !== i) {
+          await supabase.from('lessons').update({ order_index: i }).eq('id', newTargetLessons[i].id)
+        }
       }
     }
 
     setDragLessonId(null)
     setDragOverLessonId(null)
-    toast.success('Order saved!')
+    toast.success(sourceModuleId !== targetModuleId ? 'Lesson moved to new section!' : 'Order saved!')
     loadCourse()
+  }
+
+  const duplicateLesson = async (lesson: Lesson) => {
+    const modLessons = lessons.filter(l => l.module_id === lesson.module_id)
+    const { error } = await supabase.from('lessons').insert({
+      module_id: lesson.module_id, title: `${lesson.title} (Copy)`, description: lesson.description,
+      content_type: lesson.content_type, order_index: modLessons.length,
+      youtube_url: lesson.youtube_url, youtube_embed_id: lesson.youtube_embed_id,
+      vimeo_url: lesson.vimeo_url, audio_url: lesson.audio_url, pdf_url: lesson.pdf_url,
+      lesson_notes: lesson.lesson_notes, scripture_references: lesson.scripture_references,
+      estimated_duration_minutes: lesson.estimated_duration_minutes,
+      is_required: lesson.is_required, quiz_required: lesson.quiz_required,
+    })
+    if (error) toast.error('Failed to duplicate')
+    else { toast.success('Lesson duplicated!'); loadCourse() }
   }
 
   const getContentTypeBadge = (lesson: Lesson) => {
@@ -552,15 +722,75 @@ export default function EditCoursePage() {
               </select></div>
           </div>
           <div><Label>Description</Label><textarea value={course?.description || ''} onChange={(e) => setCourse({ ...course, description: e.target.value })} className="w-full min-h-[80px] px-3 py-2 border rounded-md text-sm" /></div>
-          <div><Label>Thumbnail</Label>
+          <div><Label>Course Cover Photo</Label>
             <div className="flex items-start gap-4">
               {course?.thumbnail_url && <img src={course.thumbnail_url} alt="Cover" className="w-32 h-20 object-cover rounded border" />}
               <div className="flex-1 space-y-2">
-                <Input value={course?.thumbnail_url || ''} onChange={(e) => setCourse({ ...course, thumbnail_url: e.target.value })} placeholder="Paste image URL or upload" />
-                <CoverGenerator courseTitle={course?.title || ''} courseCategory={course?.category} courseDescription={course?.description} currentThumbnail={course?.thumbnail_url} onSelectCover={(url) => setCourse({ ...course, thumbnail_url: url })} />
+                <Input value={course?.thumbnail_url || ''} onChange={(e) => setCourse({ ...course, thumbnail_url: e.target.value })} placeholder="Paste image URL or upload from device" />
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex items-center gap-2 px-3 py-2 bg-[#0a1628] text-white rounded-lg cursor-pointer hover:bg-[#1a3a5c] text-xs font-medium">
+                    <Camera className="w-3.5 h-3.5" /> Upload from Device
+                    <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const ext = file.name.split('.').pop()?.toLowerCase()
+                      const fileName = `cover-${params.id}-${Date.now()}.${ext}`
+                      const { data: sessionData } = await supabase.auth.getSession()
+                      const token = sessionData?.session?.access_token
+                      try {
+                        const signedRes = await fetch('/api/upload', {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ fileName, bucket: 'course-thumbnails' }),
+                        })
+                        const signedData = await signedRes.json()
+                        if (!signedRes.ok) { toast.error(signedData.error || 'Failed to get upload URL'); return }
+                        const uploadRes = await fetch(signedData.signedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
+                        if (!uploadRes.ok) { toast.error('Upload failed'); return }
+                        setCourse({ ...course, thumbnail_url: signedData.publicUrl })
+                        toast.success('Cover photo uploaded!')
+                      } catch (err: any) { toast.error(err.message || 'Upload failed') }
+                    }} />
+                  </label>
+                  <CoverGenerator courseTitle={course?.title || ''} courseCategory={course?.category} courseDescription={course?.description} currentThumbnail={course?.thumbnail_url} onSelectCover={(url) => setCourse({ ...course, thumbnail_url: url })} />
+                </div>
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Instructor Management */}
+      <Card>
+        <CardHeader><CardTitle className="text-lg text-[#0a1628]">Course Instructor(s)</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Primary Instructor</Label>
+            <select value={course?.instructor_id || ''} onChange={(e) => setCourse({ ...course, instructor_id: e.target.value })} className="w-full h-10 px-3 border rounded-md text-sm">
+              <option value="">Select instructor...</option>
+              {allTeachers.map((t) => <option key={t.id} value={t.id}>{t.full_name} ({t.role})</option>)}
+            </select>
+          </div>
+          {instructors.length > 0 && (
+            <div>
+              <Label className="text-xs text-gray-500 mb-2 block">Current Instructor(s)</Label>
+              <div className="flex flex-wrap gap-3">
+                {instructors.map((instr) => (
+                  <div key={instr.id} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border">
+                    {instr.avatar_url ? (
+                      <img src={instr.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[#0a1628] text-[#c9a227] flex items-center justify-center text-xs font-bold">{instr.full_name?.charAt(0) || '?'}</div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-[#0a1628]">{instr.full_name}</p>
+                      <p className="text-[10px] text-gray-500">{instr.role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -574,12 +804,33 @@ export default function EditCoursePage() {
         </Card>
       )}
 
-      {/* Tools Bar */}
-      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 items-center">
-        <Button onClick={() => setShowAddModule(!showAddModule)} variant="outline" size="sm" className="text-xs"><Plus className="w-3.5 h-3.5 mr-1" /> Add Section</Button>
-        <Button onClick={() => setShowAddLesson(!showAddLesson)} className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold text-xs" size="sm"><Plus className="w-3.5 h-3.5 mr-1" /> Add Lesson</Button>
-        <Button onClick={() => setShowBulkUpload(!showBulkUpload)} variant="outline" size="sm" className="text-xs"><Upload className="w-3.5 h-3.5 mr-1" /> Bulk Upload</Button>
-        <Button onClick={() => setShowContentBuilder(!showContentBuilder)} variant="outline" size="sm" className="border-purple-300 text-purple-700 hover:bg-purple-50 text-xs"><Wand2 className="w-3.5 h-3.5 mr-1" /> AI Builder</Button>
+      {/* Action Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <button onClick={() => setShowAddModule(!showAddModule)} className={`text-left p-3 sm:p-4 rounded-xl border-2 transition-all hover:shadow-md ${showAddModule ? 'border-[#0a1628] bg-[#0a1628]/5' : 'border-gray-200 hover:border-[#0a1628]/30'}`}>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg bg-[#0a1628] text-white flex items-center justify-center"><Plus className="w-4 h-4" /></div></div>
+          <p className="text-sm font-semibold text-[#0a1628]">Add Section</p>
+          <p className="text-[10px] text-gray-500 hidden sm:block">Organize your content into sections</p>
+        </button>
+        <button onClick={() => setShowAddLesson(!showAddLesson)} className={`text-left p-3 sm:p-4 rounded-xl border-2 transition-all hover:shadow-md ${showAddLesson ? 'border-[#c9a227] bg-[#c9a227]/5' : 'border-gray-200 hover:border-[#c9a227]/30'}`}>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg bg-[#c9a227] text-[#0a1628] flex items-center justify-center"><Plus className="w-4 h-4" /></div></div>
+          <p className="text-sm font-semibold text-[#0a1628]">Add Lesson</p>
+          <p className="text-[10px] text-gray-500 hidden sm:block">Create a new lesson with content</p>
+        </button>
+        <button onClick={() => setShowContentBuilder(!showContentBuilder)} className={`text-left p-3 sm:p-4 rounded-xl border-2 transition-all hover:shadow-md ${showContentBuilder ? 'border-purple-400 bg-purple-50' : 'border-gray-200 hover:border-purple-300'}`}>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center"><Wand2 className="w-4 h-4" /></div></div>
+          <p className="text-sm font-semibold text-[#0a1628]">Content Creator</p>
+          <p className="text-[10px] text-gray-500 hidden sm:block">AI-powered content generation</p>
+        </button>
+        <button onClick={() => setShowBulkUpload(!showBulkUpload)} className={`text-left p-3 sm:p-4 rounded-xl border-2 transition-all hover:shadow-md ${showBulkUpload ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center"><Upload className="w-4 h-4" /></div></div>
+          <p className="text-sm font-semibold text-[#0a1628]">Bulk Upload</p>
+          <p className="text-[10px] text-gray-500 hidden sm:block">Import multiple files or links</p>
+        </button>
+        <button onClick={() => { setExpandedModules(new Set(modules.map((m: any) => m.id))) }} className="text-left p-3 sm:p-4 rounded-xl border-2 border-gray-200 hover:border-gray-400 transition-all hover:shadow-md">
+          <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 rounded-lg bg-gray-600 text-white flex items-center justify-center"><GripVertical className="w-4 h-4" /></div></div>
+          <p className="text-sm font-semibold text-[#0a1628]">Reorder</p>
+          <p className="text-[10px] text-gray-500 hidden sm:block">Expand all &amp; drag to reorder</p>
+        </button>
       </div>
 
       {/* Add Module */}
@@ -647,7 +898,7 @@ export default function EditCoursePage() {
           <CardContent className="p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-[#0a1628] flex items-center gap-2"><Upload className="w-5 h-5" /> Bulk Upload Content</h3>
-              <Button variant="ghost" size="sm" onClick={() => setShowBulkUpload(false)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="sm" onClick={() => { setShowBulkUpload(false); setUploadQueue([]) }}><X className="w-4 h-4" /></Button>
             </div>
 
             {/* Option A: Paste Links */}
@@ -661,26 +912,72 @@ export default function EditCoursePage() {
               </Button>
             </div>
 
-            <div className="border-t pt-4 space-y-2">
+            <div className="border-t pt-4 space-y-3">
               <Label className="text-sm font-semibold">Option B: Upload Files</Label>
-              <p className="text-xs text-gray-500">Videos, PDFs, audio, documents. Max 50MB each.</p>
-              <div className="flex items-center gap-3">
+
+              {/* Drag-and-Drop Zone */}
+              <div
+                onDragOver={handleFileDragOver}
+                onDragLeave={handleFileDragLeave}
+                onDrop={handleFileDrop}
+                className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${dragActive ? 'border-[#c9a227] bg-[#c9a227]/5' : 'border-gray-300 hover:border-[#0a1628]/30'}`}
+              >
+                <Upload className={`w-10 h-10 mx-auto mb-3 ${dragActive ? 'text-[#c9a227]' : 'text-gray-400'}`} />
+                <p className="text-sm font-medium text-[#0a1628] mb-1">{dragActive ? 'Drop files here' : 'Drag & drop files here'}</p>
+                <p className="text-xs text-gray-400 mb-3">Videos (MP4, MOV, WebM), Audio (MP3, WAV), PDFs, Documents</p>
                 <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#0a1628] text-white rounded-lg cursor-pointer hover:bg-[#1a3a5c] text-sm">
-                  <FileUp className="w-4 h-4" /> Choose Files
-                  <input type="file" multiple accept="video/*,audio/*,.pdf,.doc,.docx" className="hidden" onChange={(e) => setBulkFiles(Array.from(e.target.files || []))} />
+                  <FileUp className="w-4 h-4" /> Browse Files
+                  <input type="file" multiple accept="video/*,audio/*,.pdf,.doc,.docx" className="hidden" onChange={(e) => { const newFiles = Array.from(e.target.files || []); setBulkFiles(prev => [...prev, ...newFiles]) }} />
                 </label>
-                {bulkFiles.length > 0 && <span className="text-sm text-gray-600">{bulkFiles.length} file(s) selected</span>}
               </div>
-              {bulkFiles.length > 0 && (
-                <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {bulkFiles.map((f, i) => <div key={i} className="text-xs text-gray-600 flex items-center gap-2"><FileText className="w-3 h-3" /> {f.name} ({(f.size / 1024 / 1024).toFixed(1)} MB)</div>)}
+
+              {/* File Queue with Progress */}
+              {(bulkFiles.length > 0 || uploadQueue.length > 0) && (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {(uploadQueue.length > 0 ? uploadQueue : bulkFiles.map(f => ({ file: f, status: 'pending' as const, progress: 0 }))).map((item, i) => {
+                    const ext = item.file.name.split('.').pop()?.toLowerCase() || ''
+                    const isVideo = ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)
+                    const isAudio = ['mp3', 'wav', 'ogg', 'm4a'].includes(ext)
+                    const isPdf = ext === 'pdf'
+                    return (
+                      <div key={i} className={`flex items-center gap-3 p-3 rounded-lg border text-sm ${item.status === 'failed' ? 'bg-red-50 border-red-200' : item.status === 'done' ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isVideo ? 'bg-red-100' : isAudio ? 'bg-green-100' : isPdf ? 'bg-orange-100' : 'bg-gray-100'}`}>
+                          {isVideo ? <Video className="w-4 h-4 text-red-600" /> : isAudio ? <Music className="w-4 h-4 text-green-600" /> : <FileText className="w-4 h-4 text-orange-600" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{item.file.name}</p>
+                          <p className="text-[10px] text-gray-400">{(item.file.size / 1024 / 1024).toFixed(1)} MB</p>
+                          {item.status === 'uploading' && (
+                            <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden">
+                              <div className="h-full bg-[#c9a227] rounded-full transition-all" style={{ width: `${item.progress}%` }} />
+                            </div>
+                          )}
+                          {item.status === 'failed' && item.error && <p className="text-[10px] text-red-600 mt-0.5">{item.error}</p>}
+                        </div>
+                        <div className="flex-shrink-0">
+                          {item.status === 'pending' && <span className="text-[10px] text-gray-400 font-medium">Queued</span>}
+                          {item.status === 'uploading' && <Loader2 className="w-4 h-4 text-[#c9a227] animate-spin" />}
+                          {item.status === 'done' && <span className="text-[10px] text-green-600 font-bold">Done</span>}
+                          {item.status === 'failed' && <button onClick={() => retryUpload(i)} className="text-[10px] text-red-600 font-bold hover:underline">Retry</button>}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
-              {bulkFiles.length > 0 && (
-                <Button onClick={handleBulkFiles} disabled={bulkUploading} className="bg-[#0a1628] text-white">
-                  {bulkUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                  {bulkUploading ? 'Uploading...' : `Upload ${bulkFiles.length} file(s)`}
-                </Button>
+
+              {bulkFiles.length > 0 && !bulkUploading && (
+                <div className="flex gap-2">
+                  <Button onClick={() => handleBulkFiles()} className="bg-[#c9a227] hover:bg-[#b8941f] text-[#0a1628] font-semibold flex-1">
+                    <Upload className="w-4 h-4 mr-2" /> Upload {bulkFiles.length} file(s)
+                  </Button>
+                  <Button variant="outline" onClick={() => { setBulkFiles([]); setUploadQueue([]) }}>Clear</Button>
+                </div>
+              )}
+              {bulkUploading && (
+                <div className="flex items-center gap-2 text-sm text-[#c9a227] font-medium">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Uploading... do not close this page
+                </div>
               )}
             </div>
           </CardContent>
@@ -759,7 +1056,7 @@ export default function EditCoursePage() {
       <div className="flex items-center gap-2 mt-2">
         <BookOpen className="w-5 h-5 text-[#0a1628]" />
         <h2 className="text-lg font-bold text-[#0a1628]">Course Structure</h2>
-        <span className="text-xs text-gray-400 ml-1">Drag lessons to reorder</span>
+        <span className="text-xs text-gray-400 ml-1">Drag lessons to reorder or move between sections</span>
       </div>
       {modules.length === 0 && lessons.length === 0 ? (
         <Card><CardContent className="text-center py-12 text-gray-400"><FileText className="w-12 h-12 mx-auto mb-3" /><p>No content yet. Add a section or lesson above.</p></CardContent></Card>
@@ -794,9 +1091,9 @@ export default function EditCoursePage() {
                   </div>
                 </div>
                 {isExpanded && (
-                  <CardContent className="p-0" onDragOver={(e) => e.preventDefault()} onDrop={() => handleDrop(mod.id)}>
+                  <CardContent className="p-0" onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }} onDrop={() => handleDrop(mod.id)}>
                     {modLessons.length === 0 ? (
-                      <div className="text-center py-6 text-gray-400 text-sm">No lessons in this section</div>
+                      <div className={`text-center py-6 text-sm transition-colors ${dragLessonId ? 'bg-[#c9a227]/10 border-2 border-dashed border-[#c9a227] text-[#c9a227] font-medium' : 'text-gray-400'}`}>{dragLessonId ? 'Drop lesson here' : 'No lessons in this section'}</div>
                     ) : modLessons.map((lesson, lesIdx) => {
                       const badge = getContentTypeBadge(lesson); const BadgeIcon = badge.icon
                       return (
@@ -814,9 +1111,10 @@ export default function EditCoursePage() {
                           </div>
                           <div className="text-xs text-gray-400 whitespace-nowrap hidden sm:block">{lesson.estimated_duration_minutes || '\u2014'} min</div>
                           <div className="flex items-center gap-0.5 flex-shrink-0">
-                            <Button variant="ghost" size="sm" onClick={() => openPreview(lesson)} title="Preview" className="text-blue-600 hover:bg-blue-50 px-1.5"><Eye className="w-3.5 h-3.5" /><span className="hidden md:inline ml-1 text-[10px]">View</span></Button>
-                            <Button variant="ghost" size="sm" onClick={() => openEditLesson(lesson)} title="Edit" className="text-[#c9a227] hover:bg-yellow-50 px-1.5"><Pencil className="w-3.5 h-3.5" /><span className="hidden md:inline ml-1 text-[10px]">Edit</span></Button>
-                            <Button variant="ghost" size="sm" onClick={() => deleteLesson(lesson.id)} title="Delete" className="text-red-500 hover:bg-red-50 px-1.5"><Trash2 className="w-3.5 h-3.5" /><span className="hidden md:inline ml-1 text-[10px]">Delete</span></Button>
+                            <Button variant="ghost" size="sm" onClick={() => openPreview(lesson)} title="Preview lesson" className="text-blue-600 hover:bg-blue-50 px-1.5"><Eye className="w-3.5 h-3.5" /><span className="hidden md:inline ml-1 text-[10px]">Preview</span></Button>
+                            <Button variant="ghost" size="sm" onClick={() => openEditLesson(lesson)} title="Edit lesson" className="text-[#c9a227] hover:bg-yellow-50 px-1.5"><Pencil className="w-3.5 h-3.5" /><span className="hidden md:inline ml-1 text-[10px]">Edit</span></Button>
+                            <Button variant="ghost" size="sm" onClick={() => duplicateLesson(lesson)} title="Duplicate lesson" className="text-gray-500 hover:bg-gray-100 px-1.5 hidden sm:flex"><Copy className="w-3.5 h-3.5" /><span className="hidden md:inline ml-1 text-[10px]">Duplicate</span></Button>
+                            <Button variant="ghost" size="sm" onClick={() => deleteLesson(lesson.id)} title="Delete lesson" className="text-red-500 hover:bg-red-50 px-1.5"><Trash2 className="w-3.5 h-3.5" /><span className="hidden md:inline ml-1 text-[10px]">Delete</span></Button>
                           </div>
                         </div>
                       )

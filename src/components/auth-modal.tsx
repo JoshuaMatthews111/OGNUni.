@@ -7,16 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { GraduationCap, BookOpen, Shield, Mail, KeyRound } from 'lucide-react'
+import { Mail, KeyRound } from 'lucide-react'
 
 const ENABLE_GOOGLE_AUTH = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === 'true'
 const ENABLE_APPLE_AUTH = process.env.NEXT_PUBLIC_ENABLE_APPLE_AUTH === 'true'
-
-const DEMO_ACCOUNTS = [
-  { label: 'Student', email: 'student@overcomersuniversity.com', password: 'Student123!', icon: GraduationCap, color: 'bg-blue-600 hover:bg-blue-700', redirect: '/dashboard' },
-  { label: 'Teacher', email: 'teacher@overcomersuniversity.com', password: 'Teacher123!', icon: BookOpen, color: 'bg-green-600 hover:bg-green-700', redirect: '/admin' },
-  { label: 'Admin', email: 'admin@overcomersuniversity.com', password: 'Admin123!', icon: Shield, color: 'bg-red-600 hover:bg-red-700', redirect: '/admin' },
-]
 
 interface AuthModalProps {
   isOpen: boolean
@@ -30,7 +24,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
-  const [seeding, setSeeding] = useState(false)
   const [loginMethod, setLoginMethod] = useState<'password' | 'magic_link'>('password')
   const [magicLinkSent, setMagicLinkSent] = useState(false)
   const [signupComplete, setSignupComplete] = useState(false)
@@ -38,72 +31,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   const [resetEmailSent, setResetEmailSent] = useState(false)
 
   const supabase = createClient()
-
-  const handleDemoLogin = async (account: typeof DEMO_ACCOUNTS[0]) => {
-    setLoading(true)
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: account.email,
-      password: account.password,
-    })
-
-    if (error) {
-      if (
-        error.message.toLowerCase().includes('failed to fetch') ||
-        error.message.toLowerCase().includes('fetch failed')
-      ) {
-        toast.error(
-          'Supabase is not configured. Update NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local (placeholders are currently set).'
-        )
-        setLoading(false)
-        return
-      }
-
-      if (error.message.includes('Invalid login') || error.message.includes('invalid')) {
-        setSeeding(true)
-        toast.info('Setting up demo accounts...')
-        try {
-          const res = await fetch('/api/seed-demo', { method: 'POST' })
-          if (res.ok) {
-            const { error: retryError } = await supabase.auth.signInWithPassword({
-              email: account.email,
-              password: account.password,
-            })
-            if (retryError) {
-              toast.error('Demo login failed: ' + retryError.message)
-              setLoading(false)
-              setSeeding(false)
-              return
-            }
-          } else {
-            let message = 'Failed to create demo accounts. Check your Supabase service role key.'
-            try {
-              const body = await res.json()
-              if (body?.error) message = body.error
-            } catch {}
-            toast.error(message)
-            setLoading(false)
-            setSeeding(false)
-            return
-          }
-        } catch {
-          toast.error('Could not reach demo seed API')
-          setLoading(false)
-          setSeeding(false)
-          return
-        }
-        setSeeding(false)
-      } else {
-        toast.error(error.message)
-        setLoading(false)
-        return
-      }
-    }
-
-    toast.success(`Welcome! Logged in as ${account.label}`)
-    onClose()
-    window.location.href = account.redirect
-  }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -215,8 +142,19 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
         return
       }
 
+      // Account created — sign them in immediately (no waiting on the email)
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
       setLoading(false)
-      setSignupComplete(true)
+
+      if (signInError) {
+        // Fallback: account exists but auto-login failed — show the email screen
+        setSignupComplete(true)
+        return
+      }
+
+      toast.success('Welcome to OGN University!')
+      onClose()
+      window.location.href = '/dashboard?new=1'
     } catch {
       setLoading(false)
       toast.error('Something went wrong. Please try again.')
@@ -260,30 +198,6 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Demo Login Box */}
-          {mode === 'signin' && (
-            <div className="bg-[#f8f9fa] border border-[#c9a227]/30 rounded-xl p-4">
-              <p className="text-xs font-bold text-[#0a1628] text-center mb-3 tracking-wide">DEMO ACCOUNTS — Quick Login</p>
-              <div className="grid grid-cols-3 gap-2">
-                {DEMO_ACCOUNTS.map((account) => {
-                  const Icon = account.icon
-                  return (
-                    <button
-                      key={account.label}
-                      onClick={() => handleDemoLogin(account)}
-                      disabled={loading}
-                      className={`flex flex-col items-center gap-1.5 p-3 rounded-lg text-white text-xs font-semibold transition-all ${account.color} disabled:opacity-50`}
-                    >
-                      <Icon className="w-5 h-5" />
-                      <span>{seeding ? 'Setting up...' : `Login as ${account.label}`}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="text-[10px] text-gray-400 text-center mt-2">Demo accounts are auto-created on first use</p>
-            </div>
-          )}
-
           {/* Sign In Mode */}
           {mode === 'signin' && (
             <>
@@ -404,10 +318,13 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
                     <Mail className="w-8 h-8 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-[#0a1628]">Check your email!</h3>
+                  <h3 className="text-lg font-semibold text-[#0a1628]">Your account is ready!</h3>
                   <p className="text-sm text-gray-600">We sent a verification link to:</p>
                   <p className="font-semibold text-[#0a1628]">{email}</p>
-                  <p className="text-sm text-gray-500">Click the link in the email to verify your account and start learning.</p>
+                  <p className="text-sm text-gray-500">You can sign in right now with your email and password — verifying your email can be done anytime.</p>
+                  <Button onClick={() => onModeChange('signin')} className="w-full bg-[#0a1628] hover:bg-[#c9a227] hover:text-[#0a1628] font-semibold">
+                    Sign In Now
+                  </Button>
                   <div className="border-t pt-3 mt-4">
                     <p className="text-xs text-gray-400">Didn't get the email? Check your spam folder or</p>
                     <button

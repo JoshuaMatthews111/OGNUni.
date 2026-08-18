@@ -31,6 +31,11 @@ export async function GET(request: Request) {
     return NextResponse.redirect(requestUrl.origin + '/auth/reset-password')
   }
 
+  // Clicking any emailed link proves ownership of the inbox — mark verified
+  try {
+    await supabase.auth.updateUser({ data: { email_verified: true } })
+  } catch {}
+
   // User is now authenticated - check/create profile
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
