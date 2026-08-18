@@ -22,7 +22,13 @@ export async function sendViaFormSubmit({ toEmail, toName, subject, message }: F
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        // FormSubmit rejects requests without a web origin
+        Origin: 'https://www.ognuniversity.com',
+        Referer: 'https://www.ognuniversity.com/',
+      },
       body: JSON.stringify({
         name: toName || toEmail,
         email: toEmail,
