@@ -78,7 +78,19 @@ export async function sendEmail({ to, toName, subject, htmlBody, templateType, m
       }),
     })
 
-    const success = res.status >= 200 && res.status < 300
+    let success = res.status >= 200 && res.status < 300
+    let provider = 'sendgrid'
+
+    // SendGrid failed (e.g. out of credits) — fall back to FormSubmit
+    if (!success) {
+      const { sendViaFormSubmit } = await import('./formsubmit')
+      const fallbackOk = await sendViaFormSubmit({ toEmail: to, toName, subject, message: text })
+      if (fallbackOk) {
+        success = true
+        provider = 'formsubmit'
+      }
+    }
+    metadata = { ...(metadata || {}), provider }
 
     // Log to database (server-side only, don't crash if logging fails)
     try {
