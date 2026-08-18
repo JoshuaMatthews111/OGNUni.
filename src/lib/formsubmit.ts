@@ -36,7 +36,7 @@ export async function sendViaFormSubmit({ toEmail, toName, subject, message }: F
         _subject: `[OGN University] ${subject}`,
         _template: 'table',
         _captcha: 'false',
-        _autoresponse: message,
+        _autoresponse: `OGN UNIVERSITY — EDUCATE • EQUIP • EVOLVE\n\n${message}`,
       }),
     })
     const data = await res.json().catch(() => null)

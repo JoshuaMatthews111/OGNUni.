@@ -59,9 +59,14 @@ export function VerifyEmailBanner() {
   if (!visible) return null
 
   return (
-    <div className="bg-[#0a1628] border border-[#c9a227]/40 rounded-lg px-4 py-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+    <div className="bg-gradient-to-r from-[#0a1628] via-[#0e1e38] to-[#0a1628] border border-[#c9a227]/40 rounded-lg px-4 py-3 mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 shadow-lg">
       <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
-        <Mail className="w-5 h-5 text-[#c9a227] shrink-0 mt-0.5 sm:mt-0" />
+        <div className="shrink-0 flex flex-col items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/assets/ogn-university-logo-transparent.png" alt="OGN University" className="w-10 h-10 object-contain" />
+          <span className="text-[7px] tracking-[0.15em] text-[#c9a227] font-semibold mt-0.5 whitespace-nowrap">EDUCATE • EQUIP • EVOLVE</span>
+        </div>
+        <Mail className="w-5 h-5 text-[#c9a227] shrink-0 mt-0.5 sm:mt-0 hidden sm:block" />
         <p className="text-sm text-white/90">
           {resent ? (
             <>A new verification email is on its way to <strong className="text-[#c9a227]">{email}</strong>. Check your inbox and spam folder.</>
